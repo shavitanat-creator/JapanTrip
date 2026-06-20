@@ -25,6 +25,9 @@ if (typeof L === 'undefined') {
   document.write('<scr'+'ipt src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"><\/scr'+'ipt>');
 }
 </script>
+<!-- Firebase (compat build — works with plain <script> tags, no bundler needed) -->
+<script src="https://www.gstatic.com/firebasejs/10.13.1/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.13.1/firebase-database-compat.js"></script>
 <style>
   :root{
     --ink:#1a1714;
@@ -311,6 +314,14 @@ if (typeof L === 'undefined') {
   .hol-ev-btn.done{background:rgba(93,110,74,.18);color:#41502f;cursor:default}
 
   /* ---------- EDIT MODE ---------- */
+  .sync-row{max-width:840px;margin:1.4rem auto 0;display:flex;justify-content:center}
+  .sync-status{
+    font-size:.8rem;font-weight:700;padding:.4rem .9rem;border-radius:999px;
+    background:var(--paper);border:1px solid var(--line);transition:.25s;
+  }
+  .sync-status.synced{color:var(--moss);border-color:rgba(93,110,74,.4);background:rgba(93,110,74,.08)}
+  .sync-status.offline{color:var(--vermilion-dk);border-color:rgba(214,69,42,.4);background:rgba(214,69,42,.08)}
+  .sync-status.connecting{color:var(--gold);border-color:rgba(192,138,45,.4);background:rgba(192,138,45,.08)}
   .edit-bar{max-width:840px;margin:1rem auto 0;display:flex;justify-content:flex-end;gap:.5rem;flex-wrap:wrap}
   .edit-toggle,.edit-save,.edit-export,.edit-reset{
     font-family:'Zen Maru Gothic';font-weight:700;font-size:.85rem;cursor:pointer;
@@ -381,6 +392,10 @@ if (typeof L === 'undefined') {
     </div>
   </div>
 
+  <div class="sync-row">
+    <span class="sync-status connecting" id="syncStatus">🟡 Connecting…</span>
+  </div>
+
   <div class="tabs">
     <button class="tab active" data-panel="itinerary">Itinerary</button>
     <button class="tab" data-panel="map">Map</button>
@@ -394,7 +409,7 @@ if (typeof L === 'undefined') {
     <button class="edit-save" id="saveBtn">💾 Save changes</button>
     <button class="edit-toggle" id="editToggle">✎ Edit itinerary</button>
   </div>
-  <p class="edit-hint" id="editHint">Click into any highlighted text to edit it. Dates and locations also drive the map — editing them updates pins, labels and the legend live. "Save changes" keeps your edits in this browser; "Export" downloads a copy of the page with your edits baked in.</p>
+  <p class="edit-hint" id="editHint">Click into any highlighted text to edit it. Dates and locations also drive the map — editing them updates pins, labels and the legend live. Changes sync to every family member's device automatically — "Save changes" also stores a local backup. "Export" downloads a copy of the page with the current itinerary baked in.</p>
 
   <!-- ITINERARY -->
   <section class="panel active" id="itinerary">
@@ -593,45 +608,145 @@ const itinerary = [
    links:[{t:"Booking",u:myTrips}]},
 ];
 
-// ---- Load saved edits (if any) and apply on top of the base itinerary ----
+// ---- Shared sync via Firebase Realtime Database ----
+// Local cache keys (used for instant load + offline fallback only — Firebase is the source of truth)
 const EDIT_STORAGE_KEY = 'japanTrip2026_edits';
+const ADDED_STORAGE_KEY = 'japanTrip2026_added';
+
+const firebaseConfig = {
+  apiKey: "AIzaSyDarDW6e2NvfEYCDqV_I7blLqJh37Lpgd0",
+  authDomain: "japantrip-2026.firebaseapp.com",
+  databaseURL: "https://japantrip-2026-default-rtdb.europe-west1.firebasedatabase.app",
+  projectId: "japantrip-2026",
+  storageBucket: "japantrip-2026.firebasestorage.app",
+  messagingSenderId: "634455170484",
+  appId: "1:634455170484:web:1eeea1ceea2684980766e1"
+};
+
+let fbApp=null, fbDb=null, fbReady=false;
+let suppressNextWrite=false; // true while we're applying a remote update, so we don't echo it straight back
+
+function applyEditsSnapshot(saved){
+  if(!Array.isArray(saved)) return;
+  saved.forEach((edits,i)=>{
+    if(!edits || !itinerary[i]) return;
+    Object.keys(edits).forEach(field=>{ itinerary[i][field]=edits[field]; });
+  });
+}
+function applyAddedSnapshot(saved){
+  if(!Array.isArray(saved)) return;
+  saved.forEach((arr,i)=>{
+    if(!Array.isArray(arr) || !itinerary[i]) return;
+    itinerary[i].added = arr;
+  });
+}
+
+// ---- Local cache (instant first paint, offline fallback) ----
 function loadSavedEdits(){
   try{
     const raw = localStorage.getItem(EDIT_STORAGE_KEY);
     if(!raw) return;
-    const saved = JSON.parse(raw);
-    if(!Array.isArray(saved)) return;
-    saved.forEach((edits,i)=>{
-      if(!edits || !itinerary[i]) return;
-      Object.keys(edits).forEach(field=>{
-        itinerary[i][field]=edits[field];
-      });
-    });
+    applyEditsSnapshot(JSON.parse(raw));
   }catch(e){ console.warn('Could not load saved edits', e); }
 }
-loadSavedEdits();
-
-// ---- Load/save custom "added" attractions per leg ----
-const ADDED_STORAGE_KEY = 'japanTrip2026_added';
 function loadSavedAdded(){
   try{
     const raw = localStorage.getItem(ADDED_STORAGE_KEY);
     if(!raw) return;
-    const saved = JSON.parse(raw);
-    if(!Array.isArray(saved)) return;
-    saved.forEach((arr,i)=>{
-      if(!Array.isArray(arr) || !itinerary[i]) return;
-      itinerary[i].added = arr;
-    });
+    applyAddedSnapshot(JSON.parse(raw));
   }catch(e){ console.warn('Could not load saved attractions', e); }
+}
+function cacheEditsLocally(){
+  try{
+    const snapshot = itinerary.map(it=>({dates:it.dates,loc:it.loc,title:it.title,hotel:it.hotel,desc:it.desc,move:it.move}));
+    localStorage.setItem(EDIT_STORAGE_KEY, JSON.stringify(snapshot));
+  }catch(e){ console.warn('Could not cache edits', e); }
 }
 function saveAddedAttractions(){
   try{
     const snapshot = itinerary.map(it=>it.added||[]);
     localStorage.setItem(ADDED_STORAGE_KEY, JSON.stringify(snapshot));
-  }catch(e){ console.warn('Could not save attractions', e); }
+  }catch(e){ console.warn('Could not cache attractions', e); }
+  pushAddedToFirebase();
 }
+loadSavedEdits();
 loadSavedAdded();
+
+// ---- Firebase: connect, pull latest shared state, then listen live ----
+function setSyncStatus(state){
+  // state: 'connecting' | 'synced' | 'offline'
+  const el=document.getElementById('syncStatus');
+  if(!el) return;
+  el.classList.remove('connecting','synced','offline');
+  el.classList.add(state);
+  el.textContent = state==='synced' ? '🟢 Synced with family'
+                  : state==='offline' ? '🔴 Offline — showing last saved version'
+                  : '🟡 Connecting…';
+}
+
+function pushEditsToFirebase(){
+  if(!fbReady || suppressNextWrite) return;
+  const snapshot = {};
+  itinerary.forEach((it,i)=>{ snapshot[i]={dates:it.dates,loc:it.loc,title:it.title,hotel:it.hotel,desc:it.desc,move:it.move}; });
+  fbDb.ref('trip/edits').set(snapshot).catch(e=>console.warn('Firebase edits write failed',e));
+}
+function pushAddedToFirebase(){
+  if(!fbReady || suppressNextWrite) return;
+  const snapshot = {};
+  itinerary.forEach((it,i)=>{ snapshot[i]=it.added||[]; });
+  fbDb.ref('trip/added').set(snapshot).catch(e=>console.warn('Firebase added write failed',e));
+}
+
+function initFirebaseSync(){
+  if(typeof firebase==='undefined'){ setSyncStatus('offline'); return; }
+  try{
+    fbApp = firebase.initializeApp(firebaseConfig);
+    fbDb = firebase.database();
+  }catch(e){ console.warn('Firebase init failed', e); setSyncStatus('offline'); return; }
+
+  setSyncStatus('connecting');
+
+  // Connection state indicator
+  fbDb.ref('.info/connected').on('value', snap=>{
+    if(snap.val()===true) setSyncStatus('synced');
+    else setSyncStatus('offline');
+  });
+
+  // Live listen: edits
+  fbDb.ref('trip/edits').on('value', snap=>{
+    const val=snap.val();
+    fbReady=true;
+    if(val){
+      const arr=[]; Object.keys(val).forEach(k=>{ arr[parseInt(k,10)]=val[k]; });
+      suppressNextWrite=true;
+      applyEditsSnapshot(arr);
+      cacheEditsLocally();
+      renderTimeline();
+      drawMarkers();
+      suppressNextWrite=false;
+    } else {
+      // nothing in the cloud yet — seed it with whatever we have locally (first device to connect)
+      pushEditsToFirebase();
+    }
+  }, err=>{ console.warn('Firebase edits listen error', err); setSyncStatus('offline'); });
+
+  // Live listen: added attractions
+  fbDb.ref('trip/added').on('value', snap=>{
+    const val=snap.val();
+    fbReady=true;
+    if(val){
+      const arr=[]; Object.keys(val).forEach(k=>{ arr[parseInt(k,10)]=val[k]; });
+      suppressNextWrite=true;
+      applyAddedSnapshot(arr);
+      try{ localStorage.setItem(ADDED_STORAGE_KEY, JSON.stringify(itinerary.map(it=>it.added||[]))); }catch(e){}
+      renderTimeline();
+      drawMarkers();
+      suppressNextWrite=false;
+    } else {
+      pushAddedToFirebase();
+    }
+  }, err=>{ console.warn('Firebase added listen error', err); setSyncStatus('offline'); });
+}
 
 // Japanese national holidays during your trip window (Jul 6 – Aug 6, 2026)
 const holidays = {
@@ -837,6 +952,7 @@ function renderTimeline(){
   }
 }
 renderTimeline();
+initFirebaseSync();
 
 // Holiday & festival event quick-add (event delegation on the timeline)
 rail.addEventListener('click', e=>{
@@ -1196,7 +1312,7 @@ rail.addEventListener('blur', e=>{
   const idx=parseInt(el.dataset.idx,10);
   const field=el.dataset.field;
   if(isNaN(idx) || !itinerary[idx]) return;
-  const val = el.innerText.trim();
+  const val = (el.textContent||'').trim();
   if(itinerary[idx][field]===val) return;
   itinerary[idx][field]=val;
   dirty=true;
@@ -1219,26 +1335,19 @@ rail.addEventListener('keydown', e=>{
 });
 
 saveBtn.addEventListener('click',()=>{
-  // Build a sparse diff array (only changed fields) — but simplest/robust is to save full snapshot
-  const snapshot = itinerary.map(it=>({
-    dates:it.dates, loc:it.loc, title:it.title, hotel:it.hotel, desc:it.desc, move:it.move
-  }));
-  try{
-    localStorage.setItem(EDIT_STORAGE_KEY, JSON.stringify(snapshot));
-    dirty=false;
-    editStatus.textContent='Saved ✓';
-    editStatus.classList.add('show');
-    setTimeout(()=>editStatus.classList.remove('show'),2200);
-    refreshSavedButtons();
-  }catch(e){
-    editStatus.textContent='Save failed';
-    editStatus.classList.add('show');
-  }
+  cacheEditsLocally();
+  pushEditsToFirebase();
+  dirty=false;
+  editStatus.textContent='Saved ✓';
+  editStatus.classList.add('show');
+  setTimeout(()=>editStatus.classList.remove('show'),2200);
+  refreshSavedButtons();
 });
 
 resetBtn.addEventListener('click',()=>{
-  if(!confirm('Discard your saved edits and restore the original itinerary text?')) return;
+  if(!confirm('Discard your saved edits and restore the original itinerary text for everyone?')) return;
   try{ localStorage.removeItem(EDIT_STORAGE_KEY); }catch(e){}
+  if(fbReady && fbDb){ fbDb.ref('trip/edits').remove().catch(()=>{}); }
   location.reload();
 });
 
