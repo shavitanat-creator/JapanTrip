@@ -323,7 +323,7 @@ if (typeof L === 'undefined') {
   .sync-status.offline{color:var(--vermilion-dk);border-color:rgba(214,69,42,.4);background:rgba(214,69,42,.08)}
   .sync-status.connecting{color:var(--gold);border-color:rgba(192,138,45,.4);background:rgba(192,138,45,.08)}
   .edit-bar{max-width:840px;margin:1rem auto 0;display:flex;justify-content:flex-end;gap:.5rem;flex-wrap:wrap}
-  .edit-toggle,.edit-save,.edit-export,.edit-reset{
+  .edit-toggle,.edit-save,.edit-export,.edit-reset,.edit-resync{
     font-family:'Zen Maru Gothic';font-weight:700;font-size:.85rem;cursor:pointer;
     border-radius:999px;padding:.5rem 1.05rem;border:1px solid var(--line);transition:.2s;
   }
@@ -335,6 +335,9 @@ if (typeof L === 'undefined') {
   .edit-export.show{display:inline-block}
   .edit-reset{background:var(--paper-2);color:var(--vermilion-dk);display:none}
   .edit-reset.show{display:inline-block}
+  .edit-resync{background:var(--paper-2);color:var(--sky);border-color:rgba(62,107,140,.4);display:none}
+  .edit-resync.show{display:inline-block}
+  .edit-resync:hover{background:var(--sky);color:#fff}
   .edit-status{font-size:.78rem;color:var(--moss);align-self:center;font-weight:700;opacity:0;transition:.3s}
   .edit-status.show{opacity:1}
   body.editing .meta .dates,
@@ -404,12 +407,13 @@ if (typeof L === 'undefined') {
 
   <div class="edit-bar">
     <span class="edit-status" id="editStatus">Saved ✓</span>
+    <button class="edit-resync" id="resyncBtn">🔄 Resync from this file</button>
     <button class="edit-export" id="exportBtn">⬇ Export updated HTML</button>
     <button class="edit-reset" id="resetBtn">↺ Reset edits</button>
     <button class="edit-save" id="saveBtn">💾 Save changes</button>
     <button class="edit-toggle" id="editToggle">✎ Edit itinerary</button>
   </div>
-  <p class="edit-hint" id="editHint">Click into any highlighted text to edit it. Dates and locations also drive the map — editing them updates pins, labels and the legend live. Changes sync to every family member's device automatically — "Save changes" also stores a local backup. "Export" downloads a copy of the page with the current itinerary baked in.</p>
+  <p class="edit-hint" id="editHint">Click into any highlighted text to edit it. Dates and locations also drive the map — editing them updates pins, labels and the legend live. Changes sync to every family member's device automatically — "Save changes" also stores a local backup. "Export" downloads a copy of the page with the current itinerary baked in. If a code update doesn't seem to reach everyone, use "Resync from this file" to force-push what's currently on screen as the new shared version.</p>
 
   <!-- ITINERARY -->
   <section class="panel active" id="itinerary">
@@ -620,6 +624,11 @@ const itinerary = [
    ],
    links:[{t:"Booking",u:myTrips}]},
 ];
+
+// Pristine snapshot of what's baked into THIS file, captured before localStorage/Firebase
+// can touch it. "Resync from this file" restores from here, so it always reflects whatever
+// was last uploaded to GitHub, not whatever got clobbered by an older cloud copy on load.
+const PRISTINE_ITINERARY = JSON.parse(JSON.stringify(itinerary));
 
 // ---- Shared sync via Firebase Realtime Database ----
 // Local cache keys (used for instant load + offline fallback only — Firebase is the source of truth)
@@ -1286,6 +1295,7 @@ const editToggle=document.getElementById('editToggle');
 const saveBtn=document.getElementById('saveBtn');
 const exportBtn=document.getElementById('exportBtn');
 const resetBtn=document.getElementById('resetBtn');
+const resyncBtn=document.getElementById('resyncBtn');
 const editStatus=document.getElementById('editStatus');
 const editHint=document.getElementById('editHint');
 
@@ -1296,6 +1306,7 @@ function refreshSavedButtons(){
   const has=hasSavedEdits();
   resetBtn.classList.toggle('show', editing && has);
   exportBtn.classList.toggle('show', editing);
+  resyncBtn.classList.toggle('show', editing);
 }
 
 function setEditing(on){
@@ -1362,6 +1373,30 @@ resetBtn.addEventListener('click',()=>{
   try{ localStorage.removeItem(EDIT_STORAGE_KEY); }catch(e){}
   if(fbReady && fbDb){ fbDb.ref('trip/edits').remove().catch(()=>{}); }
   location.reload();
+});
+
+resyncBtn.addEventListener('click', async ()=>{
+  const ok=confirm(
+    'This pushes the itinerary baked into THIS page (as last uploaded to GitHub) to everyone, '+
+    'overwriting whatever is currently saved in the shared database — including any attractions '+
+    'someone else added that never made it back into the file. Use this after updating the file '+
+    'itself (e.g. after I\'ve added something for you) to make sure that version "wins". Continue?'
+  );
+  if(!ok) return;
+  // Restore the pristine, file-baked itinerary into the live array, then push it everywhere.
+  const restored = JSON.parse(JSON.stringify(PRISTINE_ITINERARY));
+  restored.forEach((it,i)=>{ itinerary[i]=it; });
+  renderTimeline();
+  drawMarkers();
+  cacheEditsLocally();
+  try{ localStorage.setItem(ADDED_STORAGE_KEY, JSON.stringify(itinerary.map(it=>it.added||[]))); }catch(e){}
+  // Bypass the suppress guard in case a remote listener just fired — this resync should always win.
+  suppressNextWrite=false;
+  pushEditsToFirebase();
+  pushAddedToFirebase();
+  editStatus.textContent='Resynced ✓';
+  editStatus.classList.add('show');
+  setTimeout(()=>editStatus.classList.remove('show'),2500);
 });
 
 // ---- EXPORT updated HTML (bakes current itinerary[] back into the page source) ----
