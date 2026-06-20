@@ -1,0 +1,16 @@
+{
+  "name": "Japan Family Expedition 2026",
+  "short_name": "Japan Trip",
+  "description": "Family itinerary, map & teen picks for the Jul 6 – Aug 6, 2026 Japan trip.",
+  "start_url": "./index.html",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "portrait-primary",
+  "background_color": "#efe5d6",
+  "theme_color": "#d6452a",
+  "icons": [
+    { "src": "icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "icon-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}
