@@ -132,17 +132,17 @@ if (typeof L === 'undefined') {
     font-family:'Fraunces',serif;font-weight:900;font-size:1.15rem;text-align:center;
     margin:1.5rem 0 .3rem;color:var(--indigo);
   }
-  .rail-col-ofer .rail-col-head{color:var(--sky)}
-  .rail-col-ofer .rail::before{background:linear-gradient(180deg,var(--sky),var(--moss) 60%,var(--gold));}
-  .rail{position:relative;max-width:840px;margin:1.5rem auto 0;padding-left:46px}
+  .rail-col-ofer .rail-col-head{color:#7a4f8c}
+  .rail-col-ofer .rail::before{background:#7a4f8c;opacity:.5}
+  .rail{position:relative;max-width:840px;margin:1.5rem auto 0;padding-left:46px;min-height:40px}
   .rail::before{
     content:"";position:absolute;left:14px;top:8px;bottom:8px;width:2px;
     background:linear-gradient(180deg,var(--vermilion),var(--indigo) 60%,var(--moss));
     opacity:.35;border-radius:2px;
   }
-  .leg{position:relative;margin-bottom:1.1rem;opacity:0;transform:translateY(16px);
+  .leg{position:absolute;left:0;right:0;margin-bottom:0;opacity:0;
        animation:rise .6s ease forwards}
-  @keyframes rise{to{opacity:1;transform:none}}
+  @keyframes rise{to{opacity:1}}
   .dot{
     position:absolute;left:-46px;top:18px;width:30px;height:30px;border-radius:50%;
     display:grid;place-items:center;font-size:.85rem;color:#fff;
@@ -224,11 +224,11 @@ if (typeof L === 'undefined') {
   .add-btn:hover{background:var(--vermilion-dk);transform:translateY(-1px)}
   .map-legend-toggle{max-width:880px;margin:0 auto .8rem;display:flex;justify-content:flex-end}
   .toggle-row{
-    display:flex;align-items:center;gap:.45rem;font-size:.85rem;font-weight:700;color:var(--sky);
-    background:rgba(62,107,140,.08);border:1px solid rgba(62,107,140,.3);border-radius:999px;
+    display:flex;align-items:center;gap:.45rem;font-size:.85rem;font-weight:700;color:#7a4f8c;
+    background:rgba(122,79,140,.08);border:1px solid rgba(122,79,140,.3);border-radius:999px;
     padding:.4rem .9rem;cursor:pointer;
   }
-  .toggle-row input{accent-color:var(--sky);cursor:pointer}
+  .toggle-row input{accent-color:#7a4f8c;cursor:pointer}
   #leafmap{
     max-width:880px;margin:0 auto;height:520px;border-radius:18px;
     border:1px solid var(--line);box-shadow:var(--shadow);overflow:hidden;z-index:0;
@@ -240,7 +240,7 @@ if (typeof L === 'undefined') {
   }
   .pin span{transform:rotate(45deg);color:#fff;font-weight:700;font-size:.8rem}
   .pin.added{border-style:dashed}
-  .pin.ofer-pin{border:2px dashed #fff;box-shadow:0 3px 8px rgba(62,107,140,.5)}
+  .pin.ofer-pin{border:2px dashed #fff;box-shadow:0 3px 8px rgba(122,79,140,.5)}
   .dep-pin{
     width:24px;height:24px;border-radius:50%;background:rgba(255,255,255,.95);
     border:2px dashed #6b6258;display:grid;place-items:center;font-size:.72rem;
@@ -526,7 +526,13 @@ if (typeof L === 'undefined') {
 <script>
 let editing=false;
 let dirty=false;
+let _lastAnchor=null;
 const myTrips = "https://secure.booking.com/mytrips.html";
+
+// Declared early so functions defined before these elements are populated (e.g. renderTimeline
+// referencing railOfer) don't hit a temporal-dead-zone ReferenceError when called during setup.
+const rail = document.getElementById('rail');
+const railOfer = document.getElementById('railOfer');
 
 const itinerary = [
   {dates:"Jul 6 – 7",loc:"In Transit",title:"Departure",icon:"✈",color:"#6b6258",
@@ -664,153 +670,157 @@ const itinerary = [
 // ---- Ofer's parallel trip (Nakasendo hike + Hokkaido East), simplified: date, route, sleep, notes ----
 // Source: Japan_hike_2026.xlsx — "Nakasendo" + "Day by Day plan" + "Hokkaido East" sheets.
 // Deliberately excludes distance/km, breakfast/dinner, and booking status per Anat's request.
+// Ofer's entire route uses one consistent color, distinct from every color used in
+// Anat's itinerary, so the two routes are never confused on the map.
+const OFER_COLOR = "#7a4f8c";
+
 const oferTrip = [
-  {dates:"Jun 18 – 21",loc:"In Transit",title:"Flights to Japan",icon:"✈",color:"#3e6b8c",
+  {dates:"Jun 18 – 21",loc:"In Transit",title:"Flights to Japan",icon:"✈",color:OFER_COLOR,
    sleep:"Boutique Hotel Atrium München (Jun 18, Munich layover)",
    lat:48.1374,lng:11.5755,mapName:"Munich (flight layover)",
    desc:"TLV → MUC → Haneda, then train to Karuizawa to start the Nakasendō hike."},
 
-  {dates:"Jun 21",loc:"Karuizawa",title:"Trail Start",icon:"⛰",color:"#5d6e4a",
+  {dates:"Jun 21",loc:"Karuizawa",title:"Trail Start",icon:"⛰",color:OFER_COLOR,
    sleep:"Hotel Karuizawa Cross",
    lat:36.3486,lng:138.6332,mapName:"Karuizawa",
    desc:"Haneda → Karuizawa by train (~2h). Start of the Nakasendō trail."},
 
-  {dates:"Jun 22",loc:"Miota",title:"Day 1 · Karuizawa → Miota",icon:"🥾",color:"#5d6e4a",
+  {dates:"Jun 22",loc:"Miota",title:"Day 1 · Karuizawa → Miota",icon:"🥾",color:OFER_COLOR,
    sleep:"西軽井沢ホテル atelier bla by LONGINGHOUSE",
    lat:36.3000,lng:138.5167,mapName:"Miota",
    desc:"Gentle downhill from Karuizawa into the plains. Forest paths and some road walking."},
 
-  {dates:"Jun 23",loc:"Saku",title:"Day 2 · Miota → Saku",icon:"🥾",color:"#5d6e4a",
+  {dates:"Jun 23",loc:"Saku",title:"Day 2 · Miota → Saku",icon:"🥾",color:OFER_COLOR,
    sleep:"Nakagome 3-23-2, Saku",
    lat:36.2486,lng:138.4797,mapName:"Saku",
    desc:"Longer day with gradual climbs through rural countryside, rice fields, views toward Yatsugatake."},
 
-  {dates:"Jun 24",loc:"Akakura no Mori",title:"Day 3 · Saku → Akakura no Mori",icon:"🥾",color:"#5d6e4a",
+  {dates:"Jun 24",loc:"Akakura no Mori",title:"Day 3 · Saku → Akakura no Mori",icon:"🥾",color:OFER_COLOR,
    sleep:"Akakura no Mori Auto Camping Ground",
    lat:36.2978,lng:138.4244,mapName:"Akakura no Mori Camping Ground",
    desc:"Gentle rolling hills, forest and farmland. Camping night."},
 
-  {dates:"Jun 25",loc:"Suwa",title:"Day 4 · Akakura no Mori → Suwa",icon:"🥾",color:"#5d6e4a",
+  {dates:"Jun 25",loc:"Suwa",title:"Day 4 · Akakura no Mori → Suwa",icon:"🥾",color:OFER_COLOR,
    sleep:"Kamisuwa Onsen Shinyu",
    lat:36.0391,lng:138.1140,mapName:"Suwa",
    desc:"Descend toward Lake Suwa — onsen town, shrines, lake views."},
 
-  {dates:"Jun 26",loc:"Suwa",title:"Day 5 · Rest in Suwa",icon:"♨",color:"#3e6b8c",
+  {dates:"Jun 26",loc:"Suwa",title:"Day 5 · Rest in Suwa",icon:"♨",color:OFER_COLOR,
    sleep:"Kamisuwa Onsen Shinyu",
    lat:36.0391,lng:138.1140,mapName:"Suwa",
    desc:"Rest day — Suwa Taisha Shrine, lake promenade, onsen soak."},
 
-  {dates:"Jun 27",loc:"Shiojiri",title:"Day 6 · Suwa → Shiojiri",icon:"🥾",color:"#5d6e4a",
+  {dates:"Jun 27",loc:"Shiojiri",title:"Day 6 · Suwa → Shiojiri",icon:"🥾",color:OFER_COLOR,
    sleep:"Hotel Route-Inn Shiojiri",
    lat:36.1107,lng:137.9544,mapName:"Shiojiri",
    desc:"Connecting day into wine country and apple orchards."},
 
-  {dates:"Jun 28",loc:"Narai",title:"Day 7 · Shiojiri → Narai (Torii Pass) ⚠️",icon:"🥾",color:"#a8331d",
+  {dates:"Jun 28",loc:"Narai",title:"Day 7 · Shiojiri → Narai (Torii Pass) ⚠️",icon:"🥾",color:OFER_COLOR,
    sleep:"御宿 美里屋, Narai",
    lat:35.9234,lng:137.7741,mapName:"Narai",
    desc:"Longest sustained climb of the trip: Torii Pass (1,197m). One of the best-preserved post towns."},
 
-  {dates:"Jun 29",loc:"Kiso-Fukushima",title:"Day 8 · Narai → Kiso-Fukushima",icon:"🥾",color:"#5d6e4a",
+  {dates:"Jun 29",loc:"Kiso-Fukushima",title:"Day 8 · Narai → Kiso-Fukushima",icon:"🥾",color:OFER_COLOR,
    sleep:"HOTELwaiwaiyakiso",
    lat:35.8453,lng:137.7984,mapName:"Kiso-Fukushima",
    desc:"Scenic descent into the Kiso Valley — historical checkpoint town, museums, hot springs."},
 
-  {dates:"Jun 30",loc:"Suhara",title:"Day 9 · Kiso-Fukushima → Suhara",icon:"🥾",color:"#5d6e4a",
+  {dates:"Jun 30",loc:"Suhara",title:"Day 9 · Kiso-Fukushima → Suhara",icon:"🥾",color:OFER_COLOR,
    sleep:"Minshuku Suhara",
    lat:35.6953,lng:137.6894,mapName:"Suhara",
    desc:"Descend through forested valleys to a small, atmospheric post town."},
 
-  {dates:"Jul 1",loc:"Tsumago",title:"Day 10 · Suhara → Tsumago",icon:"🥾",color:"#5d6e4a",
+  {dates:"Jul 1",loc:"Tsumago",title:"Day 10 · Suhara → Tsumago",icon:"🥾",color:OFER_COLOR,
    sleep:"Daikichi, Tsumago",
    lat:35.6037,lng:137.6088,mapName:"Tsumago",
    desc:"Pleasant section along the Kiso River, more rural walking, less climbing."},
 
-  {dates:"Jul 2",loc:"Magome",title:"Day 11 · Tsumago → Magome 🌟",icon:"🥾",color:"#c08a2d",
+  {dates:"Jul 2",loc:"Magome",title:"Day 11 · Tsumago → Magome 🌟",icon:"🥾",color:OFER_COLOR,
    sleep:"Magome Chaya",
    lat:35.5341,lng:137.5631,mapName:"Magome",
    desc:"Iconic finale of the Kiso Valley hike — forest trail, waterfalls, stone paths into Magome-juku."},
 
-  {dates:"Jul 3 – 5",loc:"Kyoto",title:"Kyoto",icon:"⛩",color:"#d6452a",
+  {dates:"Jul 3 – 5",loc:"Kyoto",title:"Kyoto",icon:"⛩",color:OFER_COLOR,
    sleep:"Daiwa Roynet Hotel Kyoto Terrace Hachijo PREMIER",
    lat:34.9858,lng:135.7588,mapName:"Kyoto",
    desc:"Train to Kyoto. Ramen cooking class, teamLab BioVortex (Jul 4, 11:00)."},
 
-  {dates:"Jul 6 – 8",loc:"Tokyo",title:"Tokyo — Meet the Family",icon:"会",color:"#3e6b8c",
+  {dates:"Jul 6 – 8",loc:"Tokyo",title:"Tokyo — Meet the Family",icon:"会",color:OFER_COLOR,
    sleep:"Asakusa Tobu Hotel",
    lat:35.7114,lng:139.7974,mapName:"Asakusa Tobu Hotel",
    desc:"Train to Tokyo. First meet-up point with the family in Asakusa."},
 
-  {dates:"Jul 9 – 14",loc:"Daisetsuzan",title:"Daisetsuzan National Park",icon:"⛰",color:"#5d6e4a",
+  {dates:"Jul 9 – 14",loc:"Daisetsuzan",title:"Daisetsuzan National Park",icon:"⛰",color:OFER_COLOR,
    sleep:"Sounkaku / 層雲峡温泉ホテル雲井 / Bear Monte (Higashikawa)",
    lat:43.6817,lng:142.8553,mapName:"Daisetsuzan (Sounkyo)",
    desc:"Fly Tokyo NRT → Asahikawa, pick up rental car. 3 days of day hikes: Sounkyo Gorge, Ginga Waterfall, Soubaku Dai."},
 
-  {dates:"Jul 14 – 17",loc:"Kushiro",title:"Kushiro",icon:"🏙",color:"#3e6b8c",
+  {dates:"Jul 14 – 17",loc:"Kushiro",title:"Kushiro",icon:"🏙",color:OFER_COLOR,
    sleep:"Kushiro Century Castle Hotel",
    lat:42.9849,lng:144.3820,mapName:"Kushiro",
    desc:"Drive to Asahikawa Airport, bus to Shintoku, train to Kushiro. Starting point of the 12-day Hokkaido East hike."},
 
-  {dates:"Jul 17",loc:"Toro",title:"Toro",icon:"🥾",color:"#5d6e4a",
+  {dates:"Jul 17",loc:"Toro",title:"Toro",icon:"🥾",color:OFER_COLOR,
    sleep:"Kushiro Marshland Hostel THE GEEK",
    lat:43.0247,lng:144.4736,mapName:"Toro",
    desc:"Hike from Kushiro toward the marshland."},
 
-  {dates:"Jul 18",loc:"Shibecha",title:"Shibecha",icon:"🥾",color:"#5d6e4a",
+  {dates:"Jul 18",loc:"Shibecha",title:"Shibecha",icon:"🥾",color:OFER_COLOR,
    sleep:"Hotel Terreno Kisen",
    lat:43.1494,lng:144.5933,mapName:"Shibecha",
    desc:"Continuing the Hokkaido East hike."},
 
-  {dates:"Jul 19 – 20",loc:"Teshikaga",title:"Teshikaga",icon:"🥾",color:"#5d6e4a",
+  {dates:"Jul 19 – 20",loc:"Teshikaga",title:"Teshikaga",icon:"🥾",color:OFER_COLOR,
    sleep:"Atreyu",
    lat:43.3794,lng:144.5544,mapName:"Teshikaga",
    desc:"Option to hike Lake Mashu from here."},
 
-  {dates:"Jul 21 – 22",loc:"Lake Kusharo",title:"Lake Kusharo",icon:"🥾",color:"#5d6e4a",
+  {dates:"Jul 21 – 22",loc:"Lake Kusharo",title:"Lake Kusharo",icon:"🥾",color:OFER_COLOR,
    sleep:"Kussharo Prince Hotel",
    lat:43.6275,lng:144.3294,mapName:"Lake Kusharo",
    desc:"Hike around Lake Kusharo, Japan's largest caldera lake."},
 
-  {dates:"Jul 23 – 24",loc:"Lake Mashu",title:"Lake Mashu",icon:"🥾",color:"#5d6e4a",
+  {dates:"Jul 23 – 24",loc:"Lake Mashu",title:"Lake Mashu",icon:"🥾",color:OFER_COLOR,
    sleep:"ARtINn 極寒藝術伝染装置",
    lat:43.583,lng:144.517,mapName:"Lake Mashu",
    desc:"Hike to Lake Mashu, famed for 'Mashu Blue' water clarity."},
 
-  {dates:"Jul 25",loc:"Midori-cho",title:"Midori-cho",icon:"🥾",color:"#5d6e4a",
+  {dates:"Jul 25",loc:"Midori-cho",title:"Midori-cho",icon:"🥾",color:OFER_COLOR,
    sleep:"Shiretoko Neko cottage",
    lat:43.7547,lng:144.3781,mapName:"Midori-cho",
    desc:"Hike and train day toward Shiretoko."},
 
-  {dates:"Jul 26",loc:"Kiyosato",title:"Kiyosato Onsen",icon:"🥾",color:"#5d6e4a",
+  {dates:"Jul 26",loc:"Kiyosato",title:"Kiyosato Onsen",icon:"🥾",color:OFER_COLOR,
    sleep:"Kiyosato Onsen Hotel Ryokuseisou",
    lat:43.8536,lng:144.4072,mapName:"Kiyosato",
    desc:"Sakura Falls nearby."},
 
-  {dates:"Jul 27",loc:"Shari",title:"Shari (Shiretoko)",icon:"🥾",color:"#5d6e4a",
+  {dates:"Jul 27",loc:"Shari",title:"Shari (Shiretoko)",icon:"🥾",color:OFER_COLOR,
    sleep:"SEKKA SHIRETOKO",
    lat:43.9097,lng:144.6644,mapName:"Shari",
    desc:"Approaching the Shiretoko Peninsula."},
 
-  {dates:"Jul 28 – 29",loc:"Utoro",title:"Utoro (Shiretoko)",icon:"🥾",color:"#5d6e4a",
+  {dates:"Jul 28 – 29",loc:"Utoro",title:"Utoro (Shiretoko)",icon:"🥾",color:OFER_COLOR,
    sleep:"The SUNSET Shiretoko",
    lat:44.0667,lng:144.9167,mapName:"Utorokagawa",
    desc:"End of the 12-day Hokkaido East hike, on the Shiretoko coast."},
 
-  {dates:"Jul 30",loc:"Abashiri",title:"Abashiri",icon:"🏙",color:"#3e6b8c",
+  {dates:"Jul 30",loc:"Abashiri",title:"Abashiri",icon:"🏙",color:OFER_COLOR,
    sleep:"Dormy Inn Abashiri",
    lat:44.0206,lng:144.2733,mapName:"Abashiri",
    desc:"Bus from Utoro Spa Terminal (9:20 AM). City tour day."},
 
-  {dates:"Jul 31 – Aug 1",loc:"Asahikawa",title:"Asahikawa",icon:"🏙",color:"#3e6b8c",
+  {dates:"Jul 31 – Aug 1",loc:"Asahikawa",title:"Asahikawa",icon:"🏙",color:OFER_COLOR,
    sleep:"Dormy Inn Asahikawa",
    lat:43.7696,lng:142.3650,mapName:"Asahikawa",
    desc:"Train from Abashiri. City tour day."},
 
-  {dates:"Aug 2 – 4",loc:"Sapporo",title:"Sapporo",icon:"🏙",color:"#3e6b8c",
+  {dates:"Aug 2 – 4",loc:"Sapporo",title:"Sapporo",icon:"🏙",color:OFER_COLOR,
    sleep:"LAMP LIGHT BOOKS HOTEL Sapporo",
    lat:43.0621,lng:141.3544,mapName:"Sapporo",
    desc:"Odori Park, Mt. Moiwa, Nakajima Park, Maruyama Park."},
 
-  {dates:"Aug 5 – 7",loc:"Tokyo",title:"Tokyo — Reunite Before Flying Home 🤝",icon:"✈",color:"#c08a2d",
+  {dates:"Aug 5 – 7",loc:"Tokyo",title:"Tokyo — Reunite Before Flying Home 🤝",icon:"✈",color:OFER_COLOR,
    sleep:"Lab8 Tokyo",
    lat:35.658,lng:139.7016,mapName:"Lab8 Tokyo · Shibuya",
    desc:"Flight Sapporo → Tokyo. Final stretch before flying home Aug 7 — second meet-up point with the family."},
@@ -1057,7 +1067,6 @@ const recs = [
 ];
 
 // ---- Build timeline (re-runnable) ----
-const rail = document.getElementById('rail');
 function legBodyHTML(it,i){
   const ticketsHTML = (it.tickets||[]).map(t=>
     t.u
@@ -1125,6 +1134,60 @@ function legBodyHTML(it,i){
     ${(ticketsHTML||todosHTML||addedHTML)?`<div class="tickets">${ticketsHTML}${todosHTML}${addedHTML}</div>`:''}
     ${linksHTML?`<div class="links">${linksHTML}</div>`:''}`;
 }
+
+// ---- Date-proportional alignment between the two itinerary columns ----
+// Parses a leg's "dates" string (e.g. "Jul 9 – 15", "Jun 18 – 21", "Aug 3") into a
+// start Date, using 2026 as the year and carrying the month forward across "Month Day – Day"
+// ranges. Falls back to null if unparseable (column then falls back to normal flow).
+const MONTH_MAP={Jan:0,Feb:1,Mar:2,Apr:3,May:4,Jun:5,Jul:6,Aug:7,Sep:8,Oct:9,Nov:10,Dec:11};
+function parseLegStartDate(dateStr){
+  if(!dateStr) return null;
+  const m=dateStr.match(/^([A-Za-z]{3})\s+(\d{1,2})/);
+  if(!m) return null;
+  const month=MONTH_MAP[m[1]];
+  if(month===undefined) return null;
+  const day=parseInt(m[2],10);
+  return new Date(2026,month,day);
+}
+const DAY_MS=24*60*60*1000;
+const PX_PER_DAY=46; // vertical spacing per calendar day — tune for density
+
+function layoutAlignedRail(railEl, items, anchorDate){
+  if(!railEl || !anchorDate) return 0;
+  const legEls=railEl.querySelectorAll(':scope > .leg');
+  let maxBottom=0;
+  legEls.forEach((el,i)=>{
+    const it=items[i];
+    const d=it && parseLegStartDate(it.dates);
+    let top;
+    if(d){
+      const offsetDays=Math.round((d-anchorDate)/DAY_MS);
+      top=Math.max(0, offsetDays*PX_PER_DAY);
+    } else {
+      // unparseable date: stack right after the previous card as a fallback
+      top=maxBottom;
+    }
+    el.style.top=top+'px';
+    const h=el.offsetHeight||96;
+    maxBottom=Math.max(maxBottom, top+h+18);
+  });
+  railEl.style.height=maxBottom+'px';
+  return maxBottom;
+}
+
+function realignBothRails(){
+  if(!rail || !railOfer) return;
+  const dates=[...itinerary,...oferTrip].map(it=>parseLegStartDate(it.dates)).filter(Boolean);
+  if(!dates.length) return;
+  const anchor=new Date(Math.min(...dates));
+  _lastAnchor=anchor;
+  const h1=layoutAlignedRail(rail, itinerary, anchor);
+  const h2=layoutAlignedRail(railOfer, oferTrip, anchor);
+  const tallest=Math.max(h1,h2);
+  rail.style.height=tallest+'px';
+  railOfer.style.height=tallest+'px';
+}
+
 function renderTimeline(){
   const wasOpen = new Set();
   rail.querySelectorAll('.leg.open').forEach(el=>{
@@ -1144,7 +1207,7 @@ function renderTimeline(){
     el.innerHTML=`
       <div class="dot" style="background:${it.color}">${it.icon}</div>
       <div class="card">
-        <div class="card-top" onclick="if(!document.body.classList.contains('editing')) this.closest('.leg').classList.toggle('open')">
+        <div class="card-top" onclick="if(!document.body.classList.contains('editing')){ this.closest('.leg').classList.toggle('open'); setTimeout(()=>layoutAlignedRail(rail, itinerary, _lastAnchor), 420); }">
           <div class="meta">
             <div class="dates" contenteditable="false" data-field="dates" data-idx="${i}">${it.dates}</div>
             <div class="loc" contenteditable="false" data-field="loc" data-idx="${i}">${it.loc}</div>
@@ -1164,11 +1227,11 @@ function renderTimeline(){
   if(typeof editing!=='undefined' && editing){
     rail.querySelectorAll('[data-field]').forEach(el=>el.setAttribute('contenteditable','true'));
   }
+  if(typeof railOfer!=='undefined' && railOfer) realignBothRails();
 }
 renderTimeline();
 
 // ---- Ofer's parallel trip (simplified, read-only timeline) ----
-const railOfer = document.getElementById('railOfer');
 function renderOferTimeline(){
   if(!railOfer) return;
   const wasOpen = new Set();
@@ -1184,7 +1247,7 @@ function renderOferTimeline(){
     el.innerHTML=`
       <div class="dot" style="background:${it.color}">${it.icon}</div>
       <div class="card">
-        <div class="card-top" onclick="this.closest('.leg').classList.toggle('open')">
+        <div class="card-top" onclick="this.closest('.leg').classList.toggle('open'); setTimeout(()=>layoutAlignedRail(railOfer, oferTrip, _lastAnchor), 420)">
           <div class="meta">
             <div class="dates">${it.dates}</div>
             <div class="loc">${it.loc}</div>
@@ -1204,8 +1267,10 @@ function renderOferTimeline(){
   } else {
     railOfer.querySelector('.leg')?.classList.add('open');
   }
+  if(typeof rail!=='undefined' && rail) realignBothRails();
 }
 renderOferTimeline();
+window.addEventListener('resize', ()=>{ clearTimeout(window._realignT); window._realignT=setTimeout(realignBothRails,150); });
 
 initFirebaseSync();
 
@@ -1422,7 +1487,7 @@ function drawMarkers(){
       }
     });
     if(haveMap && linePts.length>1){
-      L.polyline(linePts,{color:'#3e6b8c',weight:3,dashArray:'8,8',opacity:.75}).addTo(oferMarkerGroup);
+      L.polyline(linePts,{color:OFER_COLOR,weight:3,dashArray:'8,8',opacity:.75}).addTo(oferMarkerGroup);
     }
   }
 }
