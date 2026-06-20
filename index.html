@@ -1151,24 +1151,82 @@ function parseLegStartDate(dateStr){
 }
 const DAY_MS=24*60*60*1000;
 const PX_PER_DAY=46; // vertical spacing per calendar day — tune for density
+const MIN_GAP=18;    // minimum visual gap between consecutive cards in the SAME column
 
-function layoutAlignedRail(railEl, items, anchorDate){
+// Builds one shared "date → top px" mapping used by BOTH columns, so a compression caused
+// by a cramped run of cards in one column also pushes the other column down to match —
+// otherwise the two timelines silently drift apart the further down the page you go.
+function buildSharedDateScale(anchorDate){
+  // 1. Collect every (date, measured-height) pair from both columns, each tagged with its
+  //    natural (uncompressed) date-proportional offset.
+  const entries=[];
+  function collect(railEl, items){
+    if(!railEl) return;
+    const legEls=railEl.querySelectorAll(':scope > .leg');
+    legEls.forEach((el,i)=>{
+      const it=items[i];
+      const d=it && parseLegStartDate(it.dates);
+      if(!d) return;
+      const offsetDays=Math.max(0, Math.round((d-anchorDate)/DAY_MS));
+      const idealTop=offsetDays*PX_PER_DAY;
+      const h=el.offsetHeight||96;
+      entries.push({offsetDays, idealTop, h});
+    });
+  }
+  collect(rail, itinerary);
+  collect(railOfer, oferTrip);
+  if(!entries.length) return {map:()=>0, maxBottom:0};
+
+  // 2. Sort by ideal (uncompressed) position, then walk forward enforcing a running "floor":
+  //    once any card (from either column) needs `top + h + gap` of room, every later date —
+  //    in both columns — is floored to at least that much, which is what keeps them in sync.
+  entries.sort((a,b)=>a.idealTop-b.idealTop);
+  const breakpoints=[{offsetDays:0, top:0}]; // offsetDays -> compressed top, monotonic & sorted
+  let floor=0;
+  entries.forEach(e=>{
+    const top=Math.max(e.idealTop, floor);
+    floor=top+e.h+MIN_GAP;
+    const last=breakpoints[breakpoints.length-1];
+    if(e.offsetDays>last.offsetDays){
+      breakpoints.push({offsetDays:e.offsetDays, top});
+    } else {
+      // same day as the previous breakpoint: keep the larger (later-forced) top
+      last.top=Math.max(last.top, top);
+    }
+  });
+
+  // 3. Build a lookup: for a given offsetDays, find the latest breakpoint at or before it,
+  //    then add any remaining proportional distance past that breakpoint.
+  function map(offsetDays){
+    let lo=0, hi=breakpoints.length-1, idx=0;
+    while(lo<=hi){
+      const mid=(lo+hi)>>1;
+      if(breakpoints[mid].offsetDays<=offsetDays){ idx=mid; lo=mid+1; } else { hi=mid-1; }
+    }
+    const bp=breakpoints[idx];
+    return bp.top + (offsetDays-bp.offsetDays)*PX_PER_DAY;
+  }
+  return {map, maxBottom:floor};
+}
+
+function layoutAlignedRail(railEl, items, anchorDate, scale){
   if(!railEl || !anchorDate) return 0;
   const legEls=railEl.querySelectorAll(':scope > .leg');
-  const MIN_GAP=18; // minimum visual gap between consecutive cards, in px
-  let prevBottom=0;
-  let maxBottom=0;
+  let prevBottom=0, maxBottom=0;
   legEls.forEach((el,i)=>{
     const it=items[i];
     const d=it && parseLegStartDate(it.dates);
-    const idealTop = d ? Math.max(0, Math.round((d-anchorDate)/DAY_MS)*PX_PER_DAY) : prevBottom;
-    // Never let a card overlap the one above it: large date gaps stretch the layout,
-    // but tightly-packed dates compress down to a fixed minimum gap instead of overlapping.
-    const top = Math.max(idealTop, prevBottom);
+    let top;
+    if(d){
+      const offsetDays=Math.max(0, Math.round((d-anchorDate)/DAY_MS));
+      top=Math.max(scale.map(offsetDays), prevBottom);
+    } else {
+      top=prevBottom; // unparseable date: stack right after the previous card
+    }
     el.style.top=top+'px';
     const h=el.offsetHeight||96;
-    prevBottom = top + h + MIN_GAP;
-    maxBottom = Math.max(maxBottom, prevBottom);
+    prevBottom=top+h+MIN_GAP;
+    maxBottom=Math.max(maxBottom, prevBottom);
   });
   railEl.style.height=maxBottom+'px';
   return maxBottom;
@@ -1180,8 +1238,9 @@ function realignBothRails(){
   if(!dates.length) return;
   const anchor=new Date(Math.min(...dates));
   _lastAnchor=anchor;
-  const h1=layoutAlignedRail(rail, itinerary, anchor);
-  const h2=layoutAlignedRail(railOfer, oferTrip, anchor);
+  const scale=buildSharedDateScale(anchor);
+  const h1=layoutAlignedRail(rail, itinerary, anchor, scale);
+  const h2=layoutAlignedRail(railOfer, oferTrip, anchor, scale);
   const tallest=Math.max(h1,h2);
   rail.style.height=tallest+'px';
   railOfer.style.height=tallest+'px';
@@ -1206,7 +1265,7 @@ function renderTimeline(){
     el.innerHTML=`
       <div class="dot" style="background:${it.color}">${it.icon}</div>
       <div class="card">
-        <div class="card-top" onclick="if(!document.body.classList.contains('editing')){ this.closest('.leg').classList.toggle('open'); setTimeout(()=>layoutAlignedRail(rail, itinerary, _lastAnchor), 420); }">
+        <div class="card-top" onclick="if(!document.body.classList.contains('editing')){ this.closest('.leg').classList.toggle('open'); setTimeout(realignBothRails, 420); }">
           <div class="meta">
             <div class="dates" contenteditable="false" data-field="dates" data-idx="${i}">${it.dates}</div>
             <div class="loc" contenteditable="false" data-field="loc" data-idx="${i}">${it.loc}</div>
@@ -1246,7 +1305,7 @@ function renderOferTimeline(){
     el.innerHTML=`
       <div class="dot" style="background:${it.color}">${it.icon}</div>
       <div class="card">
-        <div class="card-top" onclick="this.closest('.leg').classList.toggle('open'); setTimeout(()=>layoutAlignedRail(railOfer, oferTrip, _lastAnchor), 420)">
+        <div class="card-top" onclick="this.closest('.leg').classList.toggle('open'); setTimeout(realignBothRails, 420)">
           <div class="meta">
             <div class="dates">${it.dates}</div>
             <div class="loc">${it.loc}</div>
