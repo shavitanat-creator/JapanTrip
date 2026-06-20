@@ -134,15 +134,22 @@ if (typeof L === 'undefined') {
   }
   .rail-col-ofer .rail-col-head{color:#7a4f8c}
   .rail-col-ofer .rail::before{background:#7a4f8c;opacity:.5}
-  .rail{position:relative;max-width:840px;margin:1.5rem auto 0;padding-left:46px;min-height:40px}
+  .rail{position:relative;max-width:840px;margin:1.5rem auto 0;padding-left:46px}
   .rail::before{
     content:"";position:absolute;left:14px;top:8px;bottom:8px;width:2px;
     background:linear-gradient(180deg,var(--vermilion),var(--indigo) 60%,var(--moss));
     opacity:.35;border-radius:2px;
   }
-  .leg{position:absolute;left:0;right:0;margin-bottom:0;opacity:0;
+  .leg{position:relative;margin-bottom:1.1rem;opacity:0;transform:translateY(16px);
        animation:rise .6s ease forwards}
-  @keyframes rise{to{opacity:1}}
+  @keyframes rise{to{opacity:1;transform:none}}
+  .week-divider{
+    position:relative;margin:1.4rem 0 1rem;padding-left:0;font-family:'Zen Maru Gothic';
+    font-weight:700;font-size:.78rem;letter-spacing:.08em;text-transform:uppercase;
+    color:#8a7e70;display:flex;align-items:center;gap:.6rem;
+  }
+  .week-divider::after{content:"";flex:1;height:1px;background:var(--line)}
+  .week-spacer{display:block}
   .dot{
     position:absolute;left:-46px;top:18px;width:30px;height:30px;border-radius:50%;
     display:grid;place-items:center;font-size:.85rem;color:#fff;
@@ -1135,10 +1142,12 @@ function legBodyHTML(it,i){
     ${linksHTML?`<div class="links">${linksHTML}</div>`:''}`;
 }
 
-// ---- Date-proportional alignment between the two itinerary columns ----
-// Parses a leg's "dates" string (e.g. "Jul 9 – 15", "Jun 18 – 21", "Aug 3") into a
-// start Date, using 2026 as the year and carrying the month forward across "Month Day – Day"
-// ranges. Falls back to null if unparseable (column then falls back to normal flow).
+// ---- Week-aligned columns ----
+// Cards stack normally (no per-card date math, no overlap bugs). Both columns are split into
+// week-long blocks (Monday-anchored, starting from the earliest date across both trips). After
+// each week's cards render in both columns, whichever column is shorter that week gets a blank
+// spacer added so both columns reach the same height before the next week's divider — keeping
+// the week dividers level with each other even though card counts per week differ wildly.
 const MONTH_MAP={Jan:0,Feb:1,Mar:2,Apr:3,May:4,Jun:5,Jul:6,Aug:7,Sep:8,Oct:9,Nov:10,Dec:11};
 function parseLegStartDate(dateStr){
   if(!dateStr) return null;
@@ -1150,100 +1159,126 @@ function parseLegStartDate(dateStr){
   return new Date(2026,month,day);
 }
 const DAY_MS=24*60*60*1000;
-const PX_PER_DAY=46; // vertical spacing per calendar day — tune for density
-const MIN_GAP=18;    // minimum visual gap between consecutive cards in the SAME column
-
-// Builds one shared "date → top px" mapping used by BOTH columns, so a compression caused
-// by a cramped run of cards in one column also pushes the other column down to match —
-// otherwise the two timelines silently drift apart the further down the page you go.
-function buildSharedDateScale(anchorDate){
-  // 1. Collect every (date, measured-height) pair from both columns, each tagged with its
-  //    natural (uncompressed) date-proportional offset.
-  const entries=[];
-  function collect(railEl, items){
-    if(!railEl) return;
-    const legEls=railEl.querySelectorAll(':scope > .leg');
-    legEls.forEach((el,i)=>{
-      const it=items[i];
-      const d=it && parseLegStartDate(it.dates);
-      if(!d) return;
-      const offsetDays=Math.max(0, Math.round((d-anchorDate)/DAY_MS));
-      const idealTop=offsetDays*PX_PER_DAY;
-      const h=el.offsetHeight||96;
-      entries.push({offsetDays, idealTop, h});
-    });
-  }
-  collect(rail, itinerary);
-  collect(railOfer, oferTrip);
-  if(!entries.length) return {map:()=>0, maxBottom:0};
-
-  // 2. Sort by ideal (uncompressed) position, then walk forward enforcing a running "floor":
-  //    once any card (from either column) needs `top + h + gap` of room, every later date —
-  //    in both columns — is floored to at least that much, which is what keeps them in sync.
-  entries.sort((a,b)=>a.idealTop-b.idealTop);
-  const breakpoints=[{offsetDays:0, top:0}]; // offsetDays -> compressed top, monotonic & sorted
-  let floor=0;
-  entries.forEach(e=>{
-    const top=Math.max(e.idealTop, floor);
-    floor=top+e.h+MIN_GAP;
-    const last=breakpoints[breakpoints.length-1];
-    if(e.offsetDays>last.offsetDays){
-      breakpoints.push({offsetDays:e.offsetDays, top});
-    } else {
-      // same day as the previous breakpoint: keep the larger (later-forced) top
-      last.top=Math.max(last.top, top);
-    }
-  });
-
-  // 3. Build a lookup: for a given offsetDays, find the latest breakpoint at or before it,
-  //    then add any remaining proportional distance past that breakpoint.
-  function map(offsetDays){
-    let lo=0, hi=breakpoints.length-1, idx=0;
-    while(lo<=hi){
-      const mid=(lo+hi)>>1;
-      if(breakpoints[mid].offsetDays<=offsetDays){ idx=mid; lo=mid+1; } else { hi=mid-1; }
-    }
-    const bp=breakpoints[idx];
-    return bp.top + (offsetDays-bp.offsetDays)*PX_PER_DAY;
-  }
-  return {map, maxBottom:floor};
+function mondayOnOrBefore(d){
+  const day=d.getDay(); // 0=Sun..6=Sat
+  const back=(day+6)%7; // days since most recent Monday
+  return new Date(d.getFullYear(),d.getMonth(),d.getDate()-back);
 }
-
-function layoutAlignedRail(railEl, items, anchorDate, scale){
-  if(!railEl || !anchorDate) return 0;
-  const legEls=railEl.querySelectorAll(':scope > .leg');
-  let prevBottom=0, maxBottom=0;
-  legEls.forEach((el,i)=>{
-    const it=items[i];
-    const d=it && parseLegStartDate(it.dates);
-    let top;
-    if(d){
-      const offsetDays=Math.max(0, Math.round((d-anchorDate)/DAY_MS));
-      top=Math.max(scale.map(offsetDays), prevBottom);
-    } else {
-      top=prevBottom; // unparseable date: stack right after the previous card
-    }
-    el.style.top=top+'px';
-    const h=el.offsetHeight||96;
-    prevBottom=top+h+MIN_GAP;
-    maxBottom=Math.max(maxBottom, prevBottom);
-  });
-  railEl.style.height=maxBottom+'px';
-  return maxBottom;
+function weekLabel(monday){
+  const opts={month:'short',day:'numeric'};
+  return 'Week of '+monday.toLocaleDateString('en-US',opts);
 }
 
 function realignBothRails(){
   if(!rail || !railOfer) return;
-  const dates=[...itinerary,...oferTrip].map(it=>parseLegStartDate(it.dates)).filter(Boolean);
-  if(!dates.length) return;
-  const anchor=new Date(Math.min(...dates));
-  _lastAnchor=anchor;
-  const scale=buildSharedDateScale(anchor);
-  const h1=layoutAlignedRail(rail, itinerary, anchor, scale);
-  const h2=layoutAlignedRail(railOfer, oferTrip, anchor, scale);
-  const tallest=Math.max(h1,h2);
-  rail.style.height=tallest+'px';
-  railOfer.style.height=tallest+'px';
+  const allDates=[...itinerary,...oferTrip].map(it=>parseLegStartDate(it.dates)).filter(Boolean);
+  if(!allDates.length) return;
+  const firstMonday=mondayOnOrBefore(new Date(Math.min(...allDates)));
+  _lastAnchor=firstMonday;
+
+  function weekIndexOf(it){
+    const d=parseLegStartDate(it.dates);
+    if(!d) return null;
+    return Math.floor((mondayOnOrBefore(d)-firstMonday)/(7*DAY_MS));
+  }
+
+  // Detach any leftover spacer/divider from a previous pass; keep the actual card elements
+  // (cheap to re-collect, but we must NOT recreate them — that would lose .open state etc).
+  function collectCards(railEl, items){
+    const legEls=Array.from(railEl.querySelectorAll(':scope > .leg'));
+    railEl.querySelectorAll('.week-spacer, .week-divider').forEach(el=>el.remove());
+    const byWeek=new Map();
+    legEls.forEach((el,i)=>{
+      const wk=weekIndexOf(items[i]);
+      const key=wk===null?'_unknown':wk;
+      if(!byWeek.has(key)) byWeek.set(key,[]);
+      byWeek.get(key).push(el);
+    });
+    return byWeek;
+  }
+
+  const myWeeks=collectCards(rail, itinerary);
+  const oferWeeks=collectCards(railOfer, oferTrip);
+
+  const maxWeek=Math.max(
+    ...[...myWeeks.keys()].filter(k=>k!=='_unknown'),
+    ...[...oferWeeks.keys()].filter(k=>k!=='_unknown'),
+    0
+  );
+
+  // Rebuild both columns from scratch, in week order, inserting a divider for EVERY week
+  // in BOTH columns (even weeks with zero cards on one side) so the dividers always pair up,
+  // then padding whichever side is shorter that week before moving to the next one.
+  const myFrag=document.createDocumentFragment();
+  const oferFrag=document.createDocumentFragment();
+
+  // Measure the real on-screen gap between consecutive .leg cards directly from the rendered
+  // DOM (rather than parsing getComputedStyle's marginBottom, which can return an unresolved
+  // unit string like "1.1rem" instead of pixels in some environments) — this is what caused
+  // the two columns to drift apart by a few px per card, compounding into a visible misalignment
+  // after enough weeks. Falls back to a sane default if there aren't at least two cards to
+  // measure from (e.g. very early in the trip before any column has more than one entry).
+  function legGapPx(){
+    const FALLBACK=17.6; // 1.1rem at the default 16px root, matches .leg's CSS margin-bottom
+    for(const railEl of [rail, railOfer]){
+      const kids=railEl ? Array.from(railEl.querySelectorAll(':scope > .leg')) : [];
+      if(kids.length>=2 && typeof kids[0].getBoundingClientRect==='function'){
+        const a=kids[0].getBoundingClientRect();
+        const b=kids[1].getBoundingClientRect();
+        const gap=b.top-a.bottom;
+        if(gap>0 && gap<200) return gap; // sanity-bound: ignore nonsense from unlaid-out elements
+      }
+    }
+    return FALLBACK;
+  }
+  const LEG_GAP=legGapPx();
+
+  for(let wk=0; wk<=maxWeek; wk++){
+    const myCards=myWeeks.get(wk)||[];
+    const oferCards=oferWeeks.get(wk)||[];
+    if(myCards.length===0 && oferCards.length===0) continue; // truly nothing on either side
+
+    // Measure heights FIRST, while elements are still attached to the live, rendered DOM —
+    // offsetHeight on a detached fragment node always reads 0, so this must happen before
+    // any appendChild() below moves them out of `rail`/`railOfer`.
+    const myH = myCards.reduce((sum,el)=>sum+el.offsetHeight+LEG_GAP, 0);
+    const oferH = oferCards.reduce((sum,el)=>sum+el.offsetHeight+LEG_GAP, 0);
+
+    const monday=new Date(firstMonday.getTime()+wk*7*DAY_MS);
+    const label=weekLabel(monday);
+
+    const myDiv=document.createElement('div');
+    myDiv.className='week-divider';
+    myDiv.textContent=label;
+    myFrag.appendChild(myDiv);
+    myCards.forEach(el=>myFrag.appendChild(el));
+
+    const oferDiv=document.createElement('div');
+    oferDiv.className='week-divider';
+    oferDiv.textContent=label;
+    oferFrag.appendChild(oferDiv);
+    oferCards.forEach(el=>oferFrag.appendChild(el));
+
+    // Pad whichever side measured shorter so both end this week at the same height.
+    const diff = Math.abs(myH-oferH);
+    if(diff>4){
+      const spacer=document.createElement('div');
+      spacer.className='week-spacer';
+      spacer.style.height=diff+'px';
+      if(myH<oferH) myFrag.appendChild(spacer);
+      else oferFrag.appendChild(spacer);
+    }
+  }
+
+  // Any items with an unparseable date get appended at the end, in original order, in their
+  // own column only (can't meaningfully align something with no date).
+  (myWeeks.get('_unknown')||[]).forEach(el=>myFrag.appendChild(el));
+  (oferWeeks.get('_unknown')||[]).forEach(el=>oferFrag.appendChild(el));
+
+  rail.innerHTML='';
+  railOfer.innerHTML='';
+  rail.appendChild(myFrag);
+  railOfer.appendChild(oferFrag);
 }
 
 function renderTimeline(){
