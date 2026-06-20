@@ -1155,21 +1155,20 @@ const PX_PER_DAY=46; // vertical spacing per calendar day — tune for density
 function layoutAlignedRail(railEl, items, anchorDate){
   if(!railEl || !anchorDate) return 0;
   const legEls=railEl.querySelectorAll(':scope > .leg');
+  const MIN_GAP=18; // minimum visual gap between consecutive cards, in px
+  let prevBottom=0;
   let maxBottom=0;
   legEls.forEach((el,i)=>{
     const it=items[i];
     const d=it && parseLegStartDate(it.dates);
-    let top;
-    if(d){
-      const offsetDays=Math.round((d-anchorDate)/DAY_MS);
-      top=Math.max(0, offsetDays*PX_PER_DAY);
-    } else {
-      // unparseable date: stack right after the previous card as a fallback
-      top=maxBottom;
-    }
+    const idealTop = d ? Math.max(0, Math.round((d-anchorDate)/DAY_MS)*PX_PER_DAY) : prevBottom;
+    // Never let a card overlap the one above it: large date gaps stretch the layout,
+    // but tightly-packed dates compress down to a fixed minimum gap instead of overlapping.
+    const top = Math.max(idealTop, prevBottom);
     el.style.top=top+'px';
     const h=el.offsetHeight||96;
-    maxBottom=Math.max(maxBottom, top+h+18);
+    prevBottom = top + h + MIN_GAP;
+    maxBottom = Math.max(maxBottom, prevBottom);
   });
   railEl.style.height=maxBottom+'px';
   return maxBottom;
