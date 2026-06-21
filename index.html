@@ -562,13 +562,11 @@ if (typeof L === 'undefined') {
 let editing=false;
 let dirty=false;
 let _lastAnchor=null;
-// Tracks which week blocks are collapsed, independently per column. Keys are "wk{n}" and the
-// set is column-specific (myCollapsedWeeks / oferCollapsedWeeks). Populated lazily the first
-// time each column is built, since we don't know how many weeks exist until then — weeks
-// start collapsed by default (see realignBothRails, which seeds any not-yet-seen week index
-// into both sets on first encounter).
-const myCollapsedWeeks=new Set();
-const oferCollapsedWeeks=new Set();
+// Tracks which week blocks are collapsed. Shared across both columns — expanding or
+// collapsing a week on either side does the same on the other, since the two timelines are
+// meant to be browsed together. Populated lazily the first time a week is encountered (see
+// realignBothRails, which seeds any not-yet-seen week index into the set as collapsed).
+const collapsedWeeks=new Set();
 const _seenWeeks=new Set();
 const myTrips = "https://secure.booking.com/mytrips.html";
 
@@ -1274,39 +1272,37 @@ function realignBothRails(){
     const oferCards=oferWeeks.get(wk)||[];
     if(myCards.length===0 && oferCards.length===0) continue; // truly nothing on either side
 
-    // First time we ever see this week index, default it to collapsed in both columns.
+    // First time we ever see this week index, default it to collapsed.
     if(!_seenWeeks.has(wk)){
       _seenWeeks.add(wk);
-      myCollapsedWeeks.add(wk);
-      oferCollapsedWeeks.add(wk);
+      collapsedWeeks.add(wk);
     }
-    const myIsCollapsed=myCollapsedWeeks.has(wk);
-    const oferIsCollapsed=oferCollapsedWeeks.has(wk);
+    const isCollapsed=collapsedWeeks.has(wk);
 
     // Apply (or clear) the hide-class BEFORE measuring, so a collapsed week correctly
     // measures as ~0 height instead of its full expanded height.
-    myCards.forEach(el=>el.classList.toggle('wk-collapsed', myIsCollapsed));
-    oferCards.forEach(el=>el.classList.toggle('wk-collapsed', oferIsCollapsed));
+    myCards.forEach(el=>el.classList.toggle('wk-collapsed', isCollapsed));
+    oferCards.forEach(el=>el.classList.toggle('wk-collapsed', isCollapsed));
 
     // Measure heights FIRST, while elements are still attached to the live, rendered DOM —
     // offsetHeight on a detached fragment node always reads 0, so this must happen before
     // any appendChild() below moves them out of `rail`/`railOfer`.
-    const myH = myIsCollapsed ? 0 : myCards.reduce((sum,el)=>sum+el.offsetHeight+LEG_GAP, 0);
-    const oferH = oferIsCollapsed ? 0 : oferCards.reduce((sum,el)=>sum+el.offsetHeight+LEG_GAP, 0);
+    const myH = isCollapsed ? 0 : myCards.reduce((sum,el)=>sum+el.offsetHeight+LEG_GAP, 0);
+    const oferH = isCollapsed ? 0 : oferCards.reduce((sum,el)=>sum+el.offsetHeight+LEG_GAP, 0);
 
     const monday=new Date(firstMonday.getTime()+wk*7*DAY_MS);
     const label=weekLabel(monday);
 
     const myDiv=document.createElement('div');
-    myDiv.className='week-divider'+(myIsCollapsed?' collapsed':'');
-    myDiv.dataset.wk=wk; myDiv.dataset.col='mine';
+    myDiv.className='week-divider'+(isCollapsed?' collapsed':'');
+    myDiv.dataset.wk=wk;
     myDiv.innerHTML=`<span class="wk-chev">▾</span><span>${label}</span><span class="wk-count">${myCards.length} ${myCards.length===1?'stop':'stops'}</span>`;
     myFrag.appendChild(myDiv);
     myCards.forEach(el=>myFrag.appendChild(el));
 
     const oferDiv=document.createElement('div');
-    oferDiv.className='week-divider'+(oferIsCollapsed?' collapsed':'');
-    oferDiv.dataset.wk=wk; oferDiv.dataset.col='ofer';
+    oferDiv.className='week-divider'+(isCollapsed?' collapsed':'');
+    oferDiv.dataset.wk=wk;
     oferDiv.innerHTML=`<span class="wk-chev">▾</span><span>${label}</span><span class="wk-count">${oferCards.length} ${oferCards.length===1?'stop':'stops'}</span>`;
     oferFrag.appendChild(oferDiv);
     oferCards.forEach(el=>oferFrag.appendChild(el));
@@ -1454,18 +1450,19 @@ rail.addEventListener('click', e=>{
   if(typeof drawMarkers==='function') try{ drawMarkers(); }catch(_){}
 });
 
-// Week-block collapse/expand (independent per column — toggling one side never affects
-// the other). Delegated on both rails so it keeps working after realignBothRails rebuilds them.
-function handleWeekDividerClick(e, collapsedSet){
+// Week-block collapse/expand — linked across both columns. Expanding or collapsing a week
+// on either side does the same on the other, since the two timelines are meant to be browsed
+// together. Delegated on both rails so it keeps working after realignBothRails rebuilds them.
+function handleWeekDividerClick(e){
   const div=e.target.closest('.week-divider');
   if(!div) return;
   const wk=parseInt(div.dataset.wk,10);
   if(isNaN(wk)) return;
-  if(collapsedSet.has(wk)) collapsedSet.delete(wk); else collapsedSet.add(wk);
+  if(collapsedWeeks.has(wk)) collapsedWeeks.delete(wk); else collapsedWeeks.add(wk);
   realignBothRails();
 }
-rail.addEventListener('click', e=>handleWeekDividerClick(e, myCollapsedWeeks));
-railOfer.addEventListener('click', e=>handleWeekDividerClick(e, oferCollapsedWeeks));
+rail.addEventListener('click', handleWeekDividerClick);
+railOfer.addEventListener('click', handleWeekDividerClick);
 
 // ---- Build recs (Teen Picks tab) ----
 const grid=document.getElementById('recGrid');
