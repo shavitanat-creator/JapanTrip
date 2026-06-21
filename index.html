@@ -127,7 +127,24 @@ if (typeof L === 'undefined') {
 
   /* ---------- TIMELINE ---------- */
   .rails-wrap{display:grid;grid-template-columns:1fr 1fr;gap:1.5rem;max-width:1500px;margin:0 auto;align-items:start}
-  @media(max-width:900px){.rails-wrap{grid-template-columns:1fr}}
+  @media(max-width:900px){
+    .rails-wrap{
+      display:flex;gap:0;max-width:100%;
+      overflow-x:auto;scroll-snap-type:x mandatory;-webkit-overflow-scrolling:touch;
+      scrollbar-width:none; /* Firefox */
+    }
+    .rails-wrap::-webkit-scrollbar{display:none}
+    .rail-col{flex:0 0 100%;width:100%;scroll-snap-align:start;padding:0 1.25rem}
+  }
+  .swipe-hint{display:none}
+  @media(max-width:900px){
+    .swipe-hint{
+      display:flex;justify-content:center;align-items:center;gap:.4rem;
+      font-size:.78rem;color:#8a7e70;margin:.6rem 0 0;font-weight:500;
+    }
+    .swipe-hint .dot{width:6px;height:6px;border-radius:50%;background:var(--line);transition:.2s}
+    .swipe-hint .dot.active{background:var(--vermilion);width:16px;border-radius:3px}
+  }
   .rail-col-head{
     font-family:'Fraunces',serif;font-weight:900;font-size:1.15rem;text-align:center;
     margin:1.5rem 0 .3rem;color:var(--indigo);
@@ -146,9 +163,16 @@ if (typeof L === 'undefined') {
   .week-divider{
     position:relative;margin:1.4rem 0 1rem;padding-left:0;font-family:'Zen Maru Gothic';
     font-weight:700;font-size:.78rem;letter-spacing:.08em;text-transform:uppercase;
-    color:#8a7e70;display:flex;align-items:center;gap:.6rem;
+    color:#8a7e70;display:flex;align-items:center;gap:.6rem;cursor:pointer;user-select:none;
   }
+  .week-divider:hover{color:var(--ink)}
   .week-divider::after{content:"";flex:1;height:1px;background:var(--line)}
+  .week-divider .wk-chev{font-size:.7rem;transition:transform .25s ease;opacity:.6;flex:0 0 auto}
+  .week-divider.collapsed .wk-chev{transform:rotate(-90deg)}
+  .week-divider .wk-count{
+    font-weight:500;letter-spacing:0;text-transform:none;opacity:.55;font-size:.74rem;flex:0 0 auto;
+  }
+  .leg.wk-collapsed{display:none}
   .week-spacer{display:block}
   .dot{
     position:absolute;left:-46px;top:18px;width:30px;height:30px;border-radius:50%;
@@ -442,7 +466,11 @@ if (typeof L === 'undefined') {
 
   <!-- ITINERARY -->
   <section class="panel active" id="itinerary">
-    <div class="rails-wrap">
+    <div class="swipe-hint" id="swipeHint">
+      <span class="dot active" data-target="0"></span>
+      <span class="dot" data-target="1"></span>
+    </div>
+    <div class="rails-wrap" id="railsWrap">
       <div class="rail-col">
         <div class="rail-col-head">Your Trip</div>
         <div class="rail" id="rail"></div>
@@ -534,6 +562,14 @@ if (typeof L === 'undefined') {
 let editing=false;
 let dirty=false;
 let _lastAnchor=null;
+// Tracks which week blocks are collapsed, independently per column. Keys are "wk{n}" and the
+// set is column-specific (myCollapsedWeeks / oferCollapsedWeeks). Populated lazily the first
+// time each column is built, since we don't know how many weeks exist until then — weeks
+// start collapsed by default (see realignBothRails, which seeds any not-yet-seen week index
+// into both sets on first encounter).
+const myCollapsedWeeks=new Set();
+const oferCollapsedWeeks=new Set();
+const _seenWeeks=new Set();
 const myTrips = "https://secure.booking.com/mytrips.html";
 
 // Declared early so functions defined before these elements are populated (e.g. renderTimeline
@@ -1238,24 +1274,40 @@ function realignBothRails(){
     const oferCards=oferWeeks.get(wk)||[];
     if(myCards.length===0 && oferCards.length===0) continue; // truly nothing on either side
 
+    // First time we ever see this week index, default it to collapsed in both columns.
+    if(!_seenWeeks.has(wk)){
+      _seenWeeks.add(wk);
+      myCollapsedWeeks.add(wk);
+      oferCollapsedWeeks.add(wk);
+    }
+    const myIsCollapsed=myCollapsedWeeks.has(wk);
+    const oferIsCollapsed=oferCollapsedWeeks.has(wk);
+
+    // Apply (or clear) the hide-class BEFORE measuring, so a collapsed week correctly
+    // measures as ~0 height instead of its full expanded height.
+    myCards.forEach(el=>el.classList.toggle('wk-collapsed', myIsCollapsed));
+    oferCards.forEach(el=>el.classList.toggle('wk-collapsed', oferIsCollapsed));
+
     // Measure heights FIRST, while elements are still attached to the live, rendered DOM —
     // offsetHeight on a detached fragment node always reads 0, so this must happen before
     // any appendChild() below moves them out of `rail`/`railOfer`.
-    const myH = myCards.reduce((sum,el)=>sum+el.offsetHeight+LEG_GAP, 0);
-    const oferH = oferCards.reduce((sum,el)=>sum+el.offsetHeight+LEG_GAP, 0);
+    const myH = myIsCollapsed ? 0 : myCards.reduce((sum,el)=>sum+el.offsetHeight+LEG_GAP, 0);
+    const oferH = oferIsCollapsed ? 0 : oferCards.reduce((sum,el)=>sum+el.offsetHeight+LEG_GAP, 0);
 
     const monday=new Date(firstMonday.getTime()+wk*7*DAY_MS);
     const label=weekLabel(monday);
 
     const myDiv=document.createElement('div');
-    myDiv.className='week-divider';
-    myDiv.textContent=label;
+    myDiv.className='week-divider'+(myIsCollapsed?' collapsed':'');
+    myDiv.dataset.wk=wk; myDiv.dataset.col='mine';
+    myDiv.innerHTML=`<span class="wk-chev">▾</span><span>${label}</span><span class="wk-count">${myCards.length} ${myCards.length===1?'stop':'stops'}</span>`;
     myFrag.appendChild(myDiv);
     myCards.forEach(el=>myFrag.appendChild(el));
 
     const oferDiv=document.createElement('div');
-    oferDiv.className='week-divider';
-    oferDiv.textContent=label;
+    oferDiv.className='week-divider'+(oferIsCollapsed?' collapsed':'');
+    oferDiv.dataset.wk=wk; oferDiv.dataset.col='ofer';
+    oferDiv.innerHTML=`<span class="wk-chev">▾</span><span>${label}</span><span class="wk-count">${oferCards.length} ${oferCards.length===1?'stop':'stops'}</span>`;
     oferFrag.appendChild(oferDiv);
     oferCards.forEach(el=>oferFrag.appendChild(el));
 
@@ -1365,6 +1417,14 @@ function renderOferTimeline(){
 renderOferTimeline();
 window.addEventListener('resize', ()=>{ clearTimeout(window._realignT); window._realignT=setTimeout(realignBothRails,150); });
 
+// Card heights are measured for week-block alignment as soon as the timeline renders, which
+// can happen before the web fonts (Zen Maru Gothic / Fraunces) finish loading — text then
+// reflows to its final size once the real font swaps in, silently invalidating those early
+// measurements. Re-running realign once fonts are confirmed ready corrects for that.
+if(document.fonts && document.fonts.ready){
+  document.fonts.ready.then(()=>{ try{ realignBothRails(); }catch(_){} });
+}
+
 initFirebaseSync();
 
 // Holiday & festival event quick-add (event delegation on the timeline)
@@ -1393,6 +1453,19 @@ rail.addEventListener('click', e=>{
   if(all[idx]) all[idx].classList.add('open');
   if(typeof drawMarkers==='function') try{ drawMarkers(); }catch(_){}
 });
+
+// Week-block collapse/expand (independent per column — toggling one side never affects
+// the other). Delegated on both rails so it keeps working after realignBothRails rebuilds them.
+function handleWeekDividerClick(e, collapsedSet){
+  const div=e.target.closest('.week-divider');
+  if(!div) return;
+  const wk=parseInt(div.dataset.wk,10);
+  if(isNaN(wk)) return;
+  if(collapsedSet.has(wk)) collapsedSet.delete(wk); else collapsedSet.add(wk);
+  realignBothRails();
+}
+rail.addEventListener('click', e=>handleWeekDividerClick(e, myCollapsedWeeks));
+railOfer.addEventListener('click', e=>handleWeekDividerClick(e, oferCollapsedWeeks));
 
 // ---- Build recs (Teen Picks tab) ----
 const grid=document.getElementById('recGrid');
@@ -1729,6 +1802,30 @@ document.querySelectorAll('.tab').forEach(t=>{
 });
 
 document.getElementById('toggleOferMap')?.addEventListener('change', drawMarkers);
+
+// ---- Mobile swipe-hint dots (itinerary tab, <900px) ----
+// The two rail columns become a horizontally swipeable carousel below 900px. These dots
+// reflect which column is currently in view and let a tap jump straight to either one.
+(function setupSwipeHint(){
+  const wrap=document.getElementById('railsWrap');
+  const hint=document.getElementById('swipeHint');
+  if(!wrap || !hint) return;
+  const dots=Array.from(hint.querySelectorAll('.dot'));
+  dots.forEach(dot=>{
+    dot.addEventListener('click', ()=>{
+      const idx=parseInt(dot.dataset.target,10);
+      wrap.scrollTo({left: idx*wrap.clientWidth, behavior:'smooth'});
+    });
+  });
+  let scrollT=null;
+  wrap.addEventListener('scroll', ()=>{
+    clearTimeout(scrollT);
+    scrollT=setTimeout(()=>{
+      const idx = wrap.clientWidth>0 ? Math.round(wrap.scrollLeft/wrap.clientWidth) : 0;
+      dots.forEach((dot,i)=>dot.classList.toggle('active', i===idx));
+    }, 60);
+  }, {passive:true});
+})();
 
 // ---- EDIT MODE ----
 const editToggle=document.getElementById('editToggle');
