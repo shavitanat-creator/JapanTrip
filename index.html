@@ -986,11 +986,12 @@ function initFirebaseSync(){
       suppressNextWrite=true;
       applyEditsSnapshot(arr);
       cacheEditsLocally();
-      renderTimeline();
-      drawMarkers();
+      // Debounce: wait 300ms before re-rendering so a Firebase echo from our own write
+      // doesn't interrupt a card the user just tapped open.
+      clearTimeout(window._fbRenderT);
+      window._fbRenderT=setTimeout(()=>{ renderTimeline(); drawMarkers(); }, 300);
       suppressNextWrite=false;
     } else {
-      // nothing in the cloud yet — seed it with whatever we have locally (first device to connect)
       pushEditsToFirebase();
     }
   }, err=>{ console.warn('Firebase edits listen error', err); setSyncStatus('offline'); });
@@ -1004,8 +1005,8 @@ function initFirebaseSync(){
       suppressNextWrite=true;
       applyAddedSnapshot(arr);
       try{ localStorage.setItem(ADDED_STORAGE_KEY, JSON.stringify(itinerary.map(it=>it.added||[]))); }catch(e){}
-      renderTimeline();
-      drawMarkers();
+      clearTimeout(window._fbRenderT);
+      window._fbRenderT=setTimeout(()=>{ renderTimeline(); drawMarkers(); }, 300);
       suppressNextWrite=false;
     } else {
       pushAddedToFirebase();
@@ -1216,11 +1217,19 @@ function realignBothRails(){
     return Math.floor((mondayOnOrBefore(d)-firstMonday)/(7*DAY_MS));
   }
 
-  // Detach any leftover spacer/divider from a previous pass; keep the actual card elements
-  // (cheap to re-collect, but we must NOT recreate them — that would lose .open state etc).
-  function collectCards(railEl, items){
+  // Step 1: Remove only dividers and spacers — leave .leg cards exactly where they are.
+  // This means cards never leave the DOM, so there's no scroll-jump, no focus loss, no
+  // open/closed state reset — only the structural week-chrome gets rebuilt.
+  function stripChrome(railEl){
+    railEl.querySelectorAll('.week-divider, .week-spacer').forEach(el=>el.remove());
+  }
+  stripChrome(rail);
+  stripChrome(railOfer);
+
+  // Step 2: Group the now-bare .leg elements by week — they're still in their original
+  // document order inside each rail, so we just read them and categorise.
+  function groupByWeek(railEl, items){
     const legEls=Array.from(railEl.querySelectorAll(':scope > .leg'));
-    railEl.querySelectorAll('.week-spacer, .week-divider').forEach(el=>el.remove());
     const byWeek=new Map();
     legEls.forEach((el,i)=>{
       const wk=weekIndexOf(items[i]);
@@ -1231,8 +1240,8 @@ function realignBothRails(){
     return byWeek;
   }
 
-  const myWeeks=collectCards(rail, itinerary);
-  const oferWeeks=collectCards(railOfer, oferTrip);
+  const myWeeks=groupByWeek(rail, itinerary);
+  const oferWeeks=groupByWeek(railOfer, oferTrip);
 
   const maxWeek=Math.max(
     ...[...myWeeks.keys()].filter(k=>k!=='_unknown'),
@@ -1240,101 +1249,80 @@ function realignBothRails(){
     0
   );
 
-  // Rebuild both columns from scratch, in week order, inserting a divider for EVERY week
-  // in BOTH columns (even weeks with zero cards on one side) so the dividers always pair up,
-  // then padding whichever side is shorter that week before moving to the next one.
-  const myFrag=document.createDocumentFragment();
-  const oferFrag=document.createDocumentFragment();
-
-  // Measure the real on-screen gap between consecutive .leg cards directly from the rendered
-  // DOM (rather than parsing getComputedStyle's marginBottom, which can return an unresolved
-  // unit string like "1.1rem" instead of pixels in some environments) — this is what caused
-  // the two columns to drift apart by a few px per card, compounding into a visible misalignment
-  // after enough weeks. Falls back to a sane default if there aren't at least two cards to
-  // measure from (e.g. very early in the trip before any column has more than one entry).
+  // Measure the real on-screen gap between consecutive .leg cards from the rendered DOM.
   function legGapPx(){
-    const FALLBACK=17.6; // 1.1rem at the default 16px root, matches .leg's CSS margin-bottom
+    const FALLBACK=17.6;
     for(const railEl of [rail, railOfer]){
       const kids=railEl ? Array.from(railEl.querySelectorAll(':scope > .leg')) : [];
       if(kids.length>=2 && typeof kids[0].getBoundingClientRect==='function'){
         const a=kids[0].getBoundingClientRect();
         const b=kids[1].getBoundingClientRect();
         const gap=b.top-a.bottom;
-        if(gap>0 && gap<200) return gap; // sanity-bound: ignore nonsense from unlaid-out elements
+        if(gap>0 && gap<200) return gap;
       }
     }
     return FALLBACK;
   }
   const LEG_GAP=legGapPx();
 
+  // Step 3: Walk weeks in order, surgically inserting a week-divider before the first card
+  // of each week (or at the right position when a side has no cards that week), then a
+  // spacer after the last card to equalise heights — all via insertBefore/after, never
+  // touching the .leg nodes themselves.
   for(let wk=0; wk<=maxWeek; wk++){
     const myCards=myWeeks.get(wk)||[];
     const oferCards=oferWeeks.get(wk)||[];
-    if(myCards.length===0 && oferCards.length===0) continue; // truly nothing on either side
+    if(myCards.length===0 && oferCards.length===0) continue;
 
-    // First time we ever see this week index, default it to collapsed.
-    if(!_seenWeeks.has(wk)){
-      _seenWeeks.add(wk);
-      collapsedWeeks.add(wk);
-    }
+    if(!_seenWeeks.has(wk)){ _seenWeeks.add(wk); collapsedWeeks.add(wk); }
     const isCollapsed=collapsedWeeks.has(wk);
 
-    // Apply (or clear) the hide-class BEFORE measuring, so a collapsed week correctly
-    // measures as ~0 height instead of its full expanded height.
     myCards.forEach(el=>el.classList.toggle('wk-collapsed', isCollapsed));
     oferCards.forEach(el=>el.classList.toggle('wk-collapsed', isCollapsed));
 
-    // Measure heights FIRST, while elements are still attached to the live, rendered DOM —
-    // offsetHeight on a detached fragment node always reads 0, so this must happen before
-    // any appendChild() below moves them out of `rail`/`railOfer`.
     const myH = isCollapsed ? 0 : myCards.reduce((sum,el)=>sum+el.offsetHeight+LEG_GAP, 0);
     const oferH = isCollapsed ? 0 : oferCards.reduce((sum,el)=>sum+el.offsetHeight+LEG_GAP, 0);
 
     const monday=new Date(firstMonday.getTime()+wk*7*DAY_MS);
     const label=weekLabel(monday);
 
-    const myDiv=document.createElement('div');
-    myDiv.className='week-divider'+(isCollapsed?' collapsed':'');
-    myDiv.dataset.wk=wk;
-    myDiv.innerHTML=`<span class="wk-chev">▾</span><span>${label}</span><span class="wk-count">${myCards.length} ${myCards.length===1?'stop':'stops'}</span>`;
-    myFrag.appendChild(myDiv);
-    myCards.forEach(el=>myFrag.appendChild(el));
+    // Insert divider before this week's first card on each side (or append to rail if no cards).
+    function insertDivider(railEl, cards, count){
+      const div=document.createElement('div');
+      div.className='week-divider'+(isCollapsed?' collapsed':'');
+      div.dataset.wk=wk;
+      div.innerHTML=`<span class="wk-chev">▾</span><span>${label}</span>`+
+        `<span class="wk-count">${count} ${count===1?'stop':'stops'}</span>`;
+      if(cards.length) railEl.insertBefore(div, cards[0]);
+      else railEl.appendChild(div);
+      return div;
+    }
+    insertDivider(rail, myCards, myCards.length);
+    insertDivider(railOfer, oferCards, oferCards.length);
 
-    const oferDiv=document.createElement('div');
-    oferDiv.className='week-divider'+(isCollapsed?' collapsed':'');
-    oferDiv.dataset.wk=wk;
-    oferDiv.innerHTML=`<span class="wk-chev">▾</span><span>${label}</span><span class="wk-count">${oferCards.length} ${oferCards.length===1?'stop':'stops'}</span>`;
-    oferFrag.appendChild(oferDiv);
-    oferCards.forEach(el=>oferFrag.appendChild(el));
-
-    // Pad whichever side measured shorter so both end this week at the same height.
-    const diff = Math.abs(myH-oferH);
+    // Insert spacer after this week's last card (or after the divider just added if no cards).
+    const diff=Math.abs(myH-oferH);
     if(diff>4){
       const spacer=document.createElement('div');
       spacer.className='week-spacer';
       spacer.style.height=diff+'px';
-      if(myH<oferH) myFrag.appendChild(spacer);
-      else oferFrag.appendChild(spacer);
+      if(myH<oferH){
+        const anchor=myCards.length ? myCards[myCards.length-1] : rail.lastElementChild;
+        anchor.after(spacer);
+      } else {
+        const anchor=oferCards.length ? oferCards[oferCards.length-1] : railOfer.lastElementChild;
+        anchor.after(spacer);
+      }
     }
   }
-
-  // Any items with an unparseable date get appended at the end, in original order, in their
-  // own column only (can't meaningfully align something with no date).
-  (myWeeks.get('_unknown')||[]).forEach(el=>myFrag.appendChild(el));
-  (oferWeeks.get('_unknown')||[]).forEach(el=>oferFrag.appendChild(el));
-
-  rail.innerHTML='';
-  railOfer.innerHTML='';
-  rail.appendChild(myFrag);
-  railOfer.appendChild(oferFrag);
 }
 
 function renderTimeline(){
+  // Track which legs were open by their itinerary index (data-idx), not DOM child position —
+  // child positions shift when realignBothRails inserts dividers/spacers, making index-based
+  // restoration silently wrong and causing cards to snap closed on every re-render.
   const wasOpen = new Set();
-  rail.querySelectorAll('.leg.open').forEach(el=>{
-    const idx=Array.from(rail.children).indexOf(el);
-    if(idx>-1) wasOpen.add(idx);
-  });
+  rail.querySelectorAll('.leg.open .dates[data-idx]').forEach(el=>wasOpen.add(el.dataset.idx));
   rail.innerHTML='';
   itinerary.forEach((it,i)=>{
     const el=document.createElement('div');
@@ -1348,7 +1336,7 @@ function renderTimeline(){
     el.innerHTML=`
       <div class="dot" style="background:${it.color}">${it.icon}</div>
       <div class="card">
-        <div class="card-top" onclick="if(!document.body.classList.contains('editing')){ this.closest('.leg').classList.toggle('open'); setTimeout(realignBothRails, 420); }">
+        <div class="card-top" onclick="if(!document.body.classList.contains('editing')){ this.closest('.leg').classList.toggle('open'); }">
           <div class="meta">
             <div class="dates" contenteditable="false" data-field="dates" data-idx="${i}">${it.dates}</div>
             <div class="loc" contenteditable="false" data-field="loc" data-idx="${i}">${it.loc}</div>
@@ -1361,7 +1349,10 @@ function renderTimeline(){
     rail.appendChild(el);
   });
   if(wasOpen.size){
-    rail.querySelectorAll('.leg').forEach((el,idx)=>{ if(wasOpen.has(idx)) el.classList.add('open'); });
+    rail.querySelectorAll('.leg').forEach((el,i)=>{
+      const idx=el.querySelector('[data-idx]')?.dataset.idx;
+      if(idx && wasOpen.has(idx)) el.classList.add('open');
+    });
   } else {
     rail.querySelector('.leg')?.classList.add('open');
   }
@@ -1376,19 +1367,16 @@ renderTimeline();
 function renderOferTimeline(){
   if(!railOfer) return;
   const wasOpen = new Set();
-  railOfer.querySelectorAll('.leg.open').forEach(el=>{
-    const idx=Array.from(railOfer.children).indexOf(el);
-    if(idx>-1) wasOpen.add(idx);
-  });
+  railOfer.querySelectorAll('.leg.open [data-ofer-idx]').forEach(el=>wasOpen.add(el.dataset.oferIdx));
   railOfer.innerHTML='';
   oferTrip.forEach((it,i)=>{
     const el=document.createElement('div');
     el.className='leg';
     el.style.animationDelay=(i*0.04)+'s';
     el.innerHTML=`
-      <div class="dot" style="background:${it.color}">${it.icon}</div>
+      <div class="dot" style="background:${it.color}" data-ofer-idx="${i}">${it.icon}</div>
       <div class="card">
-        <div class="card-top" onclick="this.closest('.leg').classList.toggle('open'); setTimeout(realignBothRails, 420)">
+        <div class="card-top" onclick="this.closest('.leg').classList.toggle('open')">
           <div class="meta">
             <div class="dates">${it.dates}</div>
             <div class="loc">${it.loc}</div>
@@ -1404,7 +1392,9 @@ function renderOferTimeline(){
     railOfer.appendChild(el);
   });
   if(wasOpen.size){
-    railOfer.querySelectorAll('.leg').forEach((el,idx)=>{ if(wasOpen.has(idx)) el.classList.add('open'); });
+    railOfer.querySelectorAll('.leg').forEach((el,i)=>{
+      if(wasOpen.has(String(i))) el.classList.add('open');
+    });
   } else {
     railOfer.querySelector('.leg')?.classList.add('open');
   }
@@ -1580,6 +1570,15 @@ function drawMarkers(){
         dm.bindPopup(`<div class="leaf-pop"><div class="pop-dates">Depart · ${it.dates}</div><b>${it.commute.mode||''} ${it.commute.len}</b><br>${it.commute.frm}</div>`);
         markerGroup.addLayer(dm);
         depMarkers[idx]={marker:dm,pos:dpos};
+        // Route line: departure point → arrival pin, styled by transport mode
+        const mode=it.commute.mode||'';
+        const isAir=mode.includes('✈');
+        const isTrain=mode.includes('🚄')||mode.includes('🚆');
+        const routeColor=isAir?'#3e6b8c':isTrain?'#5d6e4a':it.color;
+        const dash=isAir?'6,10':isTrain?'8,5':null;
+        const lineOpts={color:routeColor,weight:2,opacity:.55};
+        if(dash) lineOpts.dashArray=dash;
+        L.polyline([[dpos.lat,dpos.lng],[pos.lat,pos.lng]],lineOpts).addTo(markerGroup);
       }
     }
 
