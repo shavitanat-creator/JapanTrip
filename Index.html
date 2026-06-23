@@ -1,0 +1,2011 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>Japan Family Expedition · Summer 2026</title>
+
+<!-- Installable app metadata -->
+<link rel="manifest" href="manifest.webmanifest">
+<meta name="theme-color" content="#d6452a">
+<link rel="icon" href="icon-192.png" sizes="192x192" type="image/png">
+<link rel="apple-touch-icon" href="icon-192.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Japan Trip">
+<meta name="mobile-web-app-capable" content="yes">
+
+<link href="https://fonts.googleapis.com/css2?family=Zen+Maru+Gothic:wght@400;500;700&family=Fraunces:opsz,wght@9..144,400;9..144,600;9..144,900&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script>
+// Fallback to a second CDN if the primary Leaflet failed to load
+if (typeof L === 'undefined') {
+  document.write('<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">');
+  document.write('<scr'+'ipt src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"><\/scr'+'ipt>');
+}
+</script>
+<!-- Firebase (compat build — works with plain <script> tags, no bundler needed) -->
+<script src="https://www.gstatic.com/firebasejs/10.13.1/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.13.1/firebase-database-compat.js"></script>
+<style>
+  :root{
+    --ink:#1a1714;
+    --paper:#f4ede2;
+    --paper-2:#ede3d4;
+    --vermilion:#d6452a;
+    --vermilion-dk:#a8331d;
+    --indigo:#2b3a55;
+    --gold:#c08a2d;
+    --moss:#5d6e4a;
+    --sky:#3e6b8c;
+    --line:rgba(26,23,20,.12);
+    --shadow:0 1px 0 rgba(255,255,255,.6) inset, 0 18px 40px -24px rgba(26,23,20,.5);
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  html{scroll-behavior:smooth}
+  body{
+    font-family:'Zen Maru Gothic',sans-serif;
+    color:var(--ink);
+    background:
+      radial-gradient(circle at 1px 1px, rgba(26,23,20,.05) 1px, transparent 0) 0 0/22px 22px,
+      linear-gradient(180deg,#f6efe5,#efe5d6);
+    background-attachment:fixed;
+    line-height:1.6;
+    -webkit-font-smoothing:antialiased;
+    padding-bottom:6rem;
+  }
+  .wrap{max-width:1080px;margin:0 auto;padding:0 1.25rem}
+
+  /* ---------- HEADER ---------- */
+  header{position:relative;text-align:center;padding:4.5rem 0 2.5rem;overflow:hidden}
+  .sun{
+    position:absolute;top:-90px;left:50%;transform:translateX(-50%);
+    width:340px;height:340px;border-radius:50%;
+    background:radial-gradient(circle, rgba(214,69,42,.16), rgba(214,69,42,0) 70%);
+    z-index:0;
+  }
+  header .kanji{
+    font-family:'Zen Maru Gothic';font-weight:700;color:var(--vermilion);
+    letter-spacing:.5em;font-size:.8rem;text-indent:.5em;position:relative;z-index:1;
+    opacity:.9;
+  }
+  header h1{
+    font-family:'Fraunces',serif;font-weight:900;font-size:clamp(2.6rem,7vw,4.6rem);
+    line-height:1.02;letter-spacing:-.02em;margin:.4rem 0 .6rem;position:relative;z-index:1;
+  }
+  header h1 em{font-style:italic;color:var(--vermilion-dk)}
+  .lede{max-width:600px;margin:0 auto;color:#5a5046;font-size:1.05rem;position:relative;z-index:1}
+  .crew{
+    display:inline-flex;flex-wrap:wrap;gap:.4rem;justify-content:center;margin-top:1.1rem;
+    position:relative;z-index:1;
+  }
+  .crew span{
+    background:rgba(43,58,85,.08);border:1px solid var(--line);border-radius:999px;
+    padding:.28rem .8rem;font-size:.82rem;font-weight:500;color:var(--indigo);
+  }
+  .install-btn{
+    position:relative;z-index:1;display:block;margin:1.3rem auto 0;
+    font-family:'Zen Maru Gothic';font-weight:700;font-size:.92rem;cursor:pointer;
+    background:var(--vermilion);color:#fff;border:none;border-radius:999px;
+    padding:.6rem 1.3rem;box-shadow:0 10px 24px -12px var(--vermilion);transition:.2s;
+  }
+  .install-btn:hover{background:var(--vermilion-dk);transform:translateY(-1px)}
+  .ios-hint{
+    position:relative;z-index:1;max-width:420px;margin:1rem auto 0;text-align:center;
+    font-size:.82rem;color:#5a5046;background:rgba(43,58,85,.06);border:1px solid var(--line);
+    border-radius:14px;padding:.6rem .9rem;
+  }
+
+  /* ---------- DASHBOARD ---------- */
+  .dash{display:grid;grid-template-columns:repeat(3,1fr);gap:1rem;margin:2.5rem 0 1rem}
+  @media(max-width:680px){.dash{grid-template-columns:1fr}}
+  .stat{
+    background:var(--paper);border:1px solid var(--line);border-radius:18px;
+    padding:1.2rem 1.3rem;box-shadow:var(--shadow);position:relative;
+  }
+  .stat .label{font-size:.72rem;text-transform:uppercase;letter-spacing:.12em;font-weight:700;opacity:.6}
+  .stat .big{font-family:'Fraunces',serif;font-weight:600;font-size:1.5rem;margin-top:.15rem}
+  .stat.go{border-color:rgba(93,110,74,.4)}
+  .stat.go .big{color:var(--moss)}
+  .stat.act{border-color:rgba(192,138,45,.45)}
+  .stat.act .big{color:var(--gold)}
+  .stat .mark{position:absolute;top:1.1rem;right:1.2rem;font-size:1.3rem;opacity:.4}
+
+  /* ---------- TABS ---------- */
+  .tabs{display:flex;gap:.4rem;justify-content:center;margin:2.5rem 0 .5rem;flex-wrap:wrap}
+  .tab{
+    font-family:'Zen Maru Gothic';font-weight:700;font-size:.92rem;cursor:pointer;
+    border:1px solid var(--line);background:var(--paper);color:var(--ink);
+    padding:.55rem 1.2rem;border-radius:999px;transition:.2s;
+  }
+  .tab:hover{transform:translateY(-1px)}
+  .tab.active{background:var(--ink);color:var(--paper);border-color:var(--ink)}
+  .panel{display:none;animation:fade .5s ease both}
+  .panel.active{display:block}
+  @keyframes fade{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:none}}
+
+  /* ---------- TIMELINE ---------- */
+  .rails-wrap{display:grid;grid-template-columns:1fr 1fr;gap:1.5rem;max-width:1500px;margin:0 auto;align-items:start}
+  @media(max-width:900px){
+    .rails-wrap{
+      display:flex;gap:0;max-width:100%;
+      overflow-x:auto;scroll-snap-type:x mandatory;-webkit-overflow-scrolling:touch;
+      scrollbar-width:none; /* Firefox */
+    }
+    .rails-wrap::-webkit-scrollbar{display:none}
+    .rail-col{flex:0 0 100%;width:100%;scroll-snap-align:start;padding:0 1.25rem}
+  }
+  .swipe-hint{display:none}
+  @media(max-width:900px){
+    .swipe-hint{
+      display:flex;justify-content:center;align-items:center;gap:.4rem;
+      font-size:.78rem;color:#8a7e70;margin:.6rem 0 0;font-weight:500;
+    }
+    .swipe-hint .dot{width:6px;height:6px;border-radius:50%;background:var(--line);transition:.2s}
+    .swipe-hint .dot.active{background:var(--vermilion);width:16px;border-radius:3px}
+  }
+  .rail-col-head{
+    font-family:'Fraunces',serif;font-weight:900;font-size:1.15rem;text-align:center;
+    margin:1.5rem 0 .3rem;color:var(--indigo);
+  }
+  .rail-col-ofer .rail-col-head{color:#7a4f8c}
+  .rail-col-ofer .rail::before{background:#7a4f8c;opacity:.5}
+  .rail{position:relative;max-width:840px;margin:1.5rem auto 0;padding-left:46px}
+  .rail::before{
+    content:"";position:absolute;left:14px;top:8px;bottom:8px;width:2px;
+    background:linear-gradient(180deg,var(--vermilion),var(--indigo) 60%,var(--moss));
+    opacity:.35;border-radius:2px;
+  }
+  .leg{position:relative;margin-bottom:1.1rem;opacity:0;transform:translateY(16px);
+       animation:rise .6s ease forwards}
+  @keyframes rise{to{opacity:1;transform:none}}
+  .week-divider{
+    position:relative;margin:1.4rem 0 1rem;padding-left:0;font-family:'Zen Maru Gothic';
+    font-weight:700;font-size:.78rem;letter-spacing:.08em;text-transform:uppercase;
+    color:#8a7e70;display:flex;align-items:center;gap:.6rem;cursor:pointer;user-select:none;
+  }
+  .week-divider:hover{color:var(--ink)}
+  .week-divider::after{content:"";flex:1;height:1px;background:var(--line)}
+  .week-divider .wk-chev{font-size:.7rem;transition:transform .25s ease;opacity:.6;flex:0 0 auto}
+  .week-divider.collapsed .wk-chev{transform:rotate(-90deg)}
+  .week-divider .wk-count{
+    font-weight:500;letter-spacing:0;text-transform:none;opacity:.55;font-size:.74rem;flex:0 0 auto;
+  }
+  .leg.wk-collapsed{display:none}
+  .week-spacer{display:block}
+  .dot{
+    position:absolute;left:-46px;top:18px;width:30px;height:30px;border-radius:50%;
+    display:grid;place-items:center;font-size:.85rem;color:#fff;
+    box-shadow:0 0 0 4px var(--paper),0 4px 10px -3px rgba(0,0,0,.4);z-index:2;
+  }
+  .card{
+    background:var(--paper);border:1px solid var(--line);border-radius:18px;
+    box-shadow:var(--shadow);overflow:hidden;transition:.25s;
+  }
+  .card:hover{transform:translateY(-2px);box-shadow:0 22px 50px -28px rgba(26,23,20,.55)}
+  .card-top{display:flex;justify-content:space-between;align-items:flex-start;
+            padding:1rem 1.25rem .4rem;gap:1rem;cursor:pointer}
+  .meta .dates{font-size:.74rem;font-weight:700;letter-spacing:.06em;text-transform:uppercase;opacity:.55}
+  .meta .loc{font-family:'Fraunces',serif;font-weight:600;font-size:1.05rem;color:var(--indigo)}
+  .meta h3{font-family:'Fraunces',serif;font-weight:900;font-size:1.3rem;line-height:1.1;margin-top:.1rem}
+  .chev{font-size:.8rem;opacity:.4;transition:.3s;margin-top:.4rem}
+  .leg.open .chev{transform:rotate(180deg)}
+  .body{max-height:0;overflow:hidden;transition:max-height .4s ease}
+  .leg.open .body{max-height:3000px}
+  .body-inner{padding:.2rem 1.25rem 1.2rem;border-top:1px dashed var(--line);margin-top:.5rem}
+  .body-inner .hotel{font-weight:700;font-size:.95rem;margin:.6rem 0 .1rem}
+  .body-inner .hotel::before{content:"⌂ ";opacity:.6}
+  .body-inner .desc{font-size:.92rem;color:#5a5046;margin-bottom:.5rem}
+  .body-inner .move{font-size:.86rem;background:rgba(43,58,85,.06);border-radius:10px;
+                    padding:.5rem .7rem;color:var(--indigo)}
+  .tickets{margin-top:.6rem;display:flex;flex-direction:column;gap:.35rem}
+  .ticket,.todo{
+    display:flex;align-items:center;gap:.5rem;font-size:.84rem;font-weight:500;
+    padding:.45rem .7rem;border-radius:10px;text-decoration:none;color:inherit;
+  }
+  .ticket{background:rgba(192,138,45,.13);border:1px solid rgba(192,138,45,.35);color:var(--vermilion-dk)}
+  .todo{background:rgba(214,69,42,.1);border:1px dashed rgba(214,69,42,.4);color:var(--vermilion-dk)}
+  .ticket:hover,.todo:hover{filter:brightness(.97)}
+  .links{margin-top:.7rem;display:flex;gap:.5rem;flex-wrap:wrap}
+  .links a{
+    font-size:.8rem;font-weight:700;text-decoration:none;color:var(--ink);
+    border:1px solid var(--line);border-radius:999px;padding:.35rem .85rem;background:var(--paper-2);
+    transition:.2s;
+  }
+  .links a:hover{background:var(--ink);color:var(--paper)}
+
+  /* ---------- RECS ---------- */
+  .rec-intro{max-width:680px;margin:1.2rem auto 2rem;text-align:center;color:#5a5046}
+  .rec-intro .src{font-size:.78rem;text-transform:uppercase;letter-spacing:.12em;font-weight:700;
+                  color:var(--vermilion);opacity:.85}
+  .recs{display:grid;grid-template-columns:repeat(2,1fr);gap:1rem;max-width:880px;margin:0 auto}
+  @media(max-width:680px){.recs{grid-template-columns:1fr}}
+  .rec{
+    background:var(--paper);border:1px solid var(--line);border-radius:18px;padding:1.3rem;
+    box-shadow:var(--shadow);position:relative;overflow:hidden;
+  }
+  .rec::before{content:"";position:absolute;left:0;top:0;bottom:0;width:5px;background:var(--c,var(--vermilion))}
+  .rec .tag{display:inline-block;font-size:.7rem;font-weight:700;text-transform:uppercase;
+            letter-spacing:.1em;color:var(--c,var(--vermilion));margin-bottom:.3rem}
+  .rec h4{font-family:'Fraunces',serif;font-weight:900;font-size:1.2rem;margin-bottom:.3rem}
+  .rec p{font-size:.9rem;color:#5a5046}
+  .rec .where{font-size:.78rem;font-weight:700;margin-top:.6rem;opacity:.7}
+  .rec .where::before{content:"📍 "}
+  .quote{
+    grid-column:1/-1;background:var(--indigo);color:var(--paper);border-radius:18px;
+    padding:1.5rem 1.6rem;font-family:'Fraunces',serif;font-style:italic;font-size:1.1rem;
+    box-shadow:var(--shadow);
+  }
+  .quote span{display:block;font-family:'Zen Maru Gothic';font-style:normal;font-size:.8rem;
+              opacity:.7;margin-top:.6rem;letter-spacing:.05em}
+
+  footer{text-align:center;margin-top:3rem;color:#8a7e70;font-size:.82rem}
+  footer .seal{font-family:'Fraunces',serif;font-weight:900;color:var(--vermilion);font-size:1.1rem}
+
+  /* ---------- MAP ---------- */
+  .map-head{display:flex;justify-content:space-between;align-items:center;gap:1rem;
+            max-width:880px;margin:1.2rem auto .9rem;flex-wrap:wrap}
+  .map-head p{color:#5a5046;font-size:.9rem;max-width:520px}
+  .add-btn{
+    font-family:'Zen Maru Gothic';font-weight:700;font-size:.9rem;cursor:pointer;white-space:nowrap;
+    background:var(--vermilion);color:#fff;border:none;border-radius:999px;padding:.6rem 1.1rem;
+    box-shadow:0 8px 20px -10px var(--vermilion);transition:.2s;
+  }
+  .add-btn:hover{background:var(--vermilion-dk);transform:translateY(-1px)}
+  .map-legend-toggle{max-width:880px;margin:0 auto .8rem;display:flex;justify-content:flex-end}
+  .toggle-row{
+    display:flex;align-items:center;gap:.45rem;font-size:.85rem;font-weight:700;color:#7a4f8c;
+    background:rgba(122,79,140,.08);border:1px solid rgba(122,79,140,.3);border-radius:999px;
+    padding:.4rem .9rem;cursor:pointer;
+  }
+  .toggle-row input{accent-color:#7a4f8c;cursor:pointer}
+  #leafmap{
+    max-width:880px;margin:0 auto;height:520px;border-radius:18px;
+    border:1px solid var(--line);box-shadow:var(--shadow);overflow:hidden;z-index:0;
+  }
+  .pin{
+    width:30px;height:30px;border-radius:50% 50% 50% 0;transform:rotate(-45deg);
+    display:grid;place-items:center;border:2px solid #fff;
+    box-shadow:0 3px 8px rgba(0,0,0,.4);
+  }
+  .pin span{transform:rotate(45deg);color:#fff;font-weight:700;font-size:.8rem}
+  .pin.added{border-style:dashed}
+  .pin.ofer-pin{border:2px dashed #fff;box-shadow:0 3px 8px rgba(122,79,140,.5)}
+  .dep-pin{
+    width:24px;height:24px;border-radius:50%;background:rgba(255,255,255,.95);
+    border:2px dashed #6b6258;display:grid;place-items:center;font-size:.72rem;
+    box-shadow:0 2px 6px rgba(0,0,0,.3);
+  }
+  .leaf-pop{font-family:'Zen Maru Gothic';font-size:.9rem}
+  .leaf-pop b{font-family:'Fraunces',serif}
+  .leaf-pop .pop-dates{font-size:.75rem;color:#777;text-transform:uppercase;letter-spacing:.05em}
+  .map-legend{max-width:880px;margin:1rem auto 0;display:flex;flex-wrap:wrap;gap:.5rem}
+  .legend-wrap{max-width:880px;margin:1rem auto 0;display:grid;grid-template-columns:1fr 1fr;gap:1.4rem}
+  @media(max-width:680px){.legend-wrap{grid-template-columns:1fr;gap:1rem}}
+  .legend-col .map-legend{margin:0;flex-direction:column;gap:.45rem}
+  #legendOfer{display:grid;grid-template-columns:1fr 1fr;gap:.5rem .8rem}
+  @media(max-width:680px){#legendOfer{grid-template-columns:1fr}}
+  .legend-title{font-family:'Fraunces',serif;font-weight:900;font-size:1.05rem;margin-bottom:.6rem;
+                padding-bottom:.35rem;border-bottom:1px solid var(--line)}
+  .lg .lg-txt{line-height:1.25;font-size:.82rem}
+  .lg .lg-txt b{font-weight:700}
+  .lg{align-items:flex-start;width:100%}
+  .lg .num.com{font-size:.85rem}
+  .commute-row .num{border-radius:8px}
+  .map-legend .lg{display:flex;align-items:flex-start;gap:.5rem;font-size:.8rem;
+                  background:var(--paper);border:1px solid var(--line);border-radius:14px;
+                  padding:.5rem .7rem;font-weight:500}
+  .map-legend .lg .num{flex:0 0 auto;width:22px;height:22px;border-radius:50%;display:grid;place-items:center;
+                       color:#fff;font-size:.7rem;font-weight:700;margin-top:.05rem}
+  .map-legend .lg.clickable{cursor:pointer;transition:.18s}
+  .map-legend .lg.clickable:hover{transform:translateY(-1px);border-color:var(--vermilion);
+                                  box-shadow:0 6px 16px -10px var(--vermilion)}
+
+  /* ---------- ADD FORM ---------- */
+  .add-form{
+    max-width:520px;margin:1.5rem auto 0;background:var(--paper);border:1px solid var(--line);
+    border-radius:18px;padding:1.4rem 1.5rem;box-shadow:var(--shadow);
+  }
+  .add-form h4{font-family:'Fraunces',serif;font-weight:900;font-size:1.3rem;margin-bottom:.8rem}
+  .add-form label{display:block;font-size:.82rem;font-weight:700;color:#5a5046;margin-bottom:.9rem}
+  .add-form input,.add-form select{
+    display:block;width:100%;margin-top:.3rem;padding:.6rem .7rem;font-family:inherit;font-size:.95rem;
+    border:1px solid var(--line);border-radius:10px;background:#fff;color:var(--ink);
+  }
+  .add-actions{display:flex;gap:.6rem;justify-content:flex-end;margin-top:.4rem}
+  .add-cancel,.add-save{font-family:'Zen Maru Gothic';font-weight:700;font-size:.9rem;cursor:pointer;
+                        border-radius:999px;padding:.55rem 1.2rem;border:1px solid var(--line);transition:.2s}
+  .add-cancel{background:var(--paper-2);color:var(--ink)}
+  .add-save{background:var(--ink);color:var(--paper);border-color:var(--ink)}
+  .add-save:hover{background:#000}
+  .add-note{font-size:.74rem;color:#8a7e70;margin-top:.9rem;line-height:1.4}
+  .added-badge{display:inline-block;font-size:.68rem;font-weight:700;text-transform:uppercase;
+               letter-spacing:.08em;color:var(--vermilion);background:rgba(214,69,42,.1);
+               border-radius:6px;padding:.1rem .4rem;margin-left:.4rem}
+  .added-row{justify-content:space-between;gap:.6rem}
+  .added-row .added-txt{flex:1;min-width:0}
+  .added-actions{display:flex;gap:.3rem;flex:0 0 auto}
+  .added-edit,.added-del{
+    font-family:inherit;font-size:.78rem;font-weight:700;cursor:pointer;line-height:1;
+    border:1px solid rgba(93,110,74,.45);border-radius:999px;width:1.7rem;height:1.7rem;
+    display:grid;place-items:center;background:#fff;color:#41502f;transition:.15s;
+  }
+  .added-edit:hover{background:var(--moss);color:#fff}
+  .added-del:hover{background:var(--vermilion);color:#fff;border-color:var(--vermilion)}
+  .holiday-badge{display:inline-block;font-size:.68rem;font-weight:700;text-transform:uppercase;
+                 letter-spacing:.08em;color:var(--gold);background:rgba(192,138,45,.15);
+                 border:1px solid rgba(192,138,45,.4);border-radius:6px;padding:.1rem .45rem;margin-left:.4rem}
+  .fest-badge{display:inline-block;font-size:.68rem;font-weight:700;text-transform:uppercase;
+              letter-spacing:.08em;color:var(--vermilion);background:rgba(214,69,42,.12);
+              border:1px solid rgba(214,69,42,.4);border-radius:6px;padding:.1rem .45rem;margin-left:.4rem}
+  .fest-block{margin:.85rem 0 .3rem;background:linear-gradient(180deg,rgba(214,69,42,.08),rgba(214,69,42,.03));
+              border:1px solid rgba(214,69,42,.3);border-radius:14px;padding:.85rem 1rem}
+  .fest-block .hol-ev{border-color:rgba(214,69,42,.25)}
+  .hol-ev-btn.fest{background:var(--vermilion)}
+  .hol-ev-btn.fest:hover{background:var(--vermilion-dk)}
+  .hol-block{margin:.85rem 0 .3rem;background:linear-gradient(180deg,rgba(192,138,45,.1),rgba(192,138,45,.04));
+             border:1px solid rgba(192,138,45,.35);border-radius:14px;padding:.85rem 1rem}
+  .hol-head{font-family:'Fraunces',serif;font-size:1rem;color:var(--ink)}
+  .hol-blurb{font-size:.85rem;color:#5a5046;margin:.4rem 0 .6rem;line-height:1.45}
+  .hol-events-title{font-size:.72rem;font-weight:700;text-transform:uppercase;letter-spacing:.1em;
+                    color:var(--gold);margin-bottom:.4rem}
+  .hol-ev{display:flex;align-items:center;justify-content:space-between;gap:.7rem;
+          background:#fff;border:1px solid rgba(192,138,45,.3);border-radius:10px;
+          padding:.6rem .75rem;margin-top:.35rem}
+  .hol-ev-txt{font-size:.84rem;line-height:1.35;flex:1;min-width:0}
+  .hol-ev-txt b{font-weight:700}
+  .hol-ev-txt span{color:#5a5046;font-size:.78rem}
+  .hol-ev-btn{font-family:inherit;font-weight:700;font-size:.78rem;cursor:pointer;
+              background:var(--gold);color:#fff;border:none;border-radius:999px;
+              padding:.45rem .85rem;white-space:nowrap;transition:.18s}
+  .hol-ev-btn:hover{filter:brightness(1.05);transform:translateY(-1px)}
+  .hol-ev-btn.done{background:rgba(93,110,74,.18);color:#41502f;cursor:default}
+
+  /* ---------- EDIT MODE ---------- */
+  .sync-row{max-width:840px;margin:1.4rem auto 0;display:flex;justify-content:center}
+  .sync-status{
+    font-size:.8rem;font-weight:700;padding:.4rem .9rem;border-radius:999px;
+    background:var(--paper);border:1px solid var(--line);transition:.25s;
+  }
+  .sync-status.synced{color:var(--moss);border-color:rgba(93,110,74,.4);background:rgba(93,110,74,.08)}
+  .sync-status.offline{color:var(--vermilion-dk);border-color:rgba(214,69,42,.4);background:rgba(214,69,42,.08)}
+  .sync-status.connecting{color:var(--gold);border-color:rgba(192,138,45,.4);background:rgba(192,138,45,.08)}
+  .edit-bar{max-width:840px;margin:1rem auto 0;display:flex;justify-content:flex-end;gap:.5rem;flex-wrap:wrap}
+  .edit-toggle,.edit-save,.edit-export,.edit-reset,.edit-resync{
+    font-family:'Zen Maru Gothic';font-weight:700;font-size:.85rem;cursor:pointer;
+    border-radius:999px;padding:.5rem 1.05rem;border:1px solid var(--line);transition:.2s;
+  }
+  .edit-toggle{background:var(--paper);color:var(--ink)}
+  .edit-toggle.on{background:var(--vermilion);color:#fff;border-color:var(--vermilion)}
+  .edit-save{background:var(--moss);color:#fff;border-color:var(--moss);display:none}
+  .edit-save.show{display:inline-block}
+  .edit-export{background:var(--paper-2);color:var(--ink);display:none}
+  .edit-export.show{display:inline-block}
+  .edit-reset{background:var(--paper-2);color:var(--vermilion-dk);display:none}
+  .edit-reset.show{display:inline-block}
+  .edit-resync{background:var(--paper-2);color:var(--sky);border-color:rgba(62,107,140,.4);display:none}
+  .edit-resync.show{display:inline-block}
+  .edit-resync:hover{background:var(--sky);color:#fff}
+  .edit-status{font-size:.78rem;color:var(--moss);align-self:center;font-weight:700;opacity:0;transition:.3s}
+  .edit-status.show{opacity:1}
+  body.editing .meta .dates,
+  body.editing .meta .loc,
+  body.editing .meta h3 .ttext,
+  body.editing .body-inner .hotel .htext,
+  body.editing .body-inner .desc,
+  body.editing .body-inner .move .mtext{
+    outline:1px dashed rgba(214,69,42,.5);outline-offset:2px;border-radius:4px;cursor:text;
+  }
+  body.editing .meta .dates:focus,
+  body.editing .meta .loc:focus,
+  body.editing .meta h3 .ttext:focus,
+  body.editing .body-inner .hotel .htext:focus,
+  body.editing .body-inner .desc:focus,
+  body.editing .body-inner .move .mtext:focus{
+    outline:2px solid var(--vermilion);background:#fff;
+  }
+  body.editing .card-top{cursor:default}
+  .edit-hint{font-size:.74rem;color:#8a7e70;max-width:840px;margin:.4rem auto 0;text-align:right;display:none}
+  .edit-hint.show{display:block}
+</style>
+</head>
+<body>
+
+<header>
+  <div class="sun"></div>
+  <div class="kanji">日本 · 2026年 夏</div>
+  <h1>Japan Family <em>Expedition</em></h1>
+  <p class="lede">A 31-day arc from the lantern-lit lanes of Kyoto to the cool wilds of Hokkaido — temples, theme parks, sand baths and shinkansen.</p>
+  <div class="crew">
+    <span>You</span><span>Daniel · 10</span><span>Ofer</span><span>Itamar</span><span>Naomi · 12½</span>
+  </div>
+  <button class="install-btn" id="installBtn" hidden>📲 Install app</button>
+  <p class="ios-hint" id="iosHint" hidden>On iPhone/iPad: tap <strong>Share</strong> ⬆️ in Safari, then <strong>"Add to Home Screen"</strong> to install.</p>
+</header>
+
+<div class="wrap">
+
+  <div class="dash">
+    <div class="stat">
+      <div class="label">Trip Window</div>
+      <div class="big">Jul 6 – Aug 6</div>
+      <div class="mark">⌛</div>
+    </div>
+    <div class="stat go">
+      <div class="label">Accommodations</div>
+      <div class="big">All Booked</div>
+      <div class="mark">✓</div>
+    </div>
+    <div class="stat act">
+      <div class="label">Action Required</div>
+      <div class="big">Tickets</div>
+      <div class="mark">!</div>
+    </div>
+  </div>
+
+  <div class="sync-row">
+    <span class="sync-status connecting" id="syncStatus">🟡 Connecting…</span>
+  </div>
+
+  <div class="tabs">
+    <button class="tab active" data-panel="itinerary">Itinerary</button>
+    <button class="tab" data-panel="map">Map</button>
+    <button class="tab" data-panel="recs">Teen Picks</button>
+  </div>
+
+  <div class="edit-bar">
+    <span class="edit-status" id="editStatus">Saved ✓</span>
+    <button class="edit-resync" id="resyncBtn">🔄 Resync from this file</button>
+    <button class="edit-export" id="exportBtn">⬇ Export updated HTML</button>
+    <button class="edit-reset" id="resetBtn">↺ Reset edits</button>
+    <button class="edit-save" id="saveBtn">💾 Save changes</button>
+    <button class="edit-toggle" id="editToggle">✎ Edit itinerary</button>
+  </div>
+  <p class="edit-hint" id="editHint">Click into any highlighted text to edit it. Dates and locations also drive the map — editing them updates pins, labels and the legend live. Changes sync to every family member's device automatically — "Save changes" also stores a local backup. "Export" downloads a copy of the page with the current itinerary baked in. If a code update doesn't seem to reach everyone, use "Resync from this file" to force-push what's currently on screen as the new shared version.</p>
+
+  <!-- ITINERARY -->
+  <section class="panel active" id="itinerary">
+    <div class="swipe-hint" id="swipeHint">
+      <span class="dot active" data-target="0"></span>
+      <span class="dot" data-target="1"></span>
+    </div>
+    <div class="rails-wrap" id="railsWrap">
+      <div class="rail-col">
+        <div class="rail-col-head">Your Trip</div>
+        <div class="rail" id="rail"></div>
+      </div>
+      <div class="rail-col rail-col-ofer">
+        <div class="rail-col-head">🥾 Ofer's Trip</div>
+        <div class="rail" id="railOfer"></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- MAP -->
+  <section class="panel" id="map">
+    <div class="map-head">
+      <p>Every stop on your route, in order. Tap a pin to see which leg it belongs to. Pins are numbered by sequence. Ofer's route shows as a dashed line.</p>
+      <button class="add-btn" id="openAdd">＋ Add attraction to a date</button>
+    </div>
+    <div class="map-legend-toggle">
+      <label class="toggle-row"><input type="checkbox" id="toggleOferMap" checked> Show Ofer's route on map</label>
+    </div>
+    <div id="leafmap"></div>
+    <div class="legend-wrap">
+      <div class="legend-col">
+        <div class="legend-title">📍 Locations</div>
+        <div class="map-legend" id="legendLocations"></div>
+      </div>
+      <div class="legend-col">
+        <div class="legend-title">🧭 Commute</div>
+        <div class="map-legend" id="legendCommute"></div>
+      </div>
+    </div>
+    <div class="legend-wrap" id="oferLegendWrap">
+      <div class="legend-col" style="grid-column:1/-1">
+        <div class="legend-title">🥾 Ofer's Stops</div>
+        <div class="map-legend" id="legendOfer"></div>
+      </div>
+    </div>
+
+    <!-- Add-attraction form (hidden until opened) -->
+    <div class="add-form" id="addForm" hidden>
+      <h4>Add an attraction</h4>
+      <label>Quick pick (optional)
+        <select id="pickPreset">
+          <option value="">— choose a teen pick, or enter your own below —</option>
+        </select>
+      </label>
+      <label>Name
+        <input id="pickName" type="text" placeholder="e.g. Ghibli Museum">
+      </label>
+      <label>Attach to which leg / date
+        <select id="pickLeg"></select>
+      </label>
+      <label>Note (optional)
+        <input id="pickNote" type="text" placeholder="e.g. afternoon, book tickets ahead">
+      </label>
+      <label>Map location (optional)
+        <div style="display:flex;gap:.5rem">
+          <input id="pickLat" type="text" inputmode="decimal" placeholder="Latitude e.g. 35.6962" style="flex:1">
+          <input id="pickLng" type="text" inputmode="decimal" placeholder="Longitude e.g. 139.5704" style="flex:1">
+        </div>
+      </label>
+      <label>Link (optional)
+        <input id="pickLink" type="url" placeholder="e.g. https://www.ghibli-museum.jp/en/">
+      </label>
+      <div class="add-actions">
+        <button class="add-cancel" id="cancelAdd">Cancel</button>
+        <button class="add-save" id="saveAdd">Add to plan</button>
+      </div>
+      <p class="add-note">Added stops appear inside that leg on the Itinerary tab, and on the map if you give coordinates (search "[place name] coordinates" or right-click it on Google Maps to copy lat/lng). The link, if given, makes the name clickable. Saved automatically in this browser — use "Edit itinerary → Export" to bake them permanently into the file.</p>
+    </div>
+  </section>
+
+  <!-- RECOMMENDATIONS -->
+  <section class="panel" id="recs">
+    <div class="rec-intro">
+      <div class="src">From the "Traveling Japan with Kids" group</div>
+      <p>Hand-picked from the community chat — the spots that parents of teens and tweens actually raved about.</p>
+    </div>
+    <div class="recs" id="recGrid"></div>
+  </section>
+
+  <footer>
+    <div class="seal">良い旅を</div>
+    Safe travels — <em>yoi tabi o!</em>
+  </footer>
+</div>
+
+<script>
+let editing=false;
+let dirty=false;
+let _lastAnchor=null;
+// Tracks which week blocks are collapsed. Shared across both columns — expanding or
+// collapsing a week on either side does the same on the other, since the two timelines are
+// meant to be browsed together. Populated lazily the first time a week is encountered (see
+// realignBothRails, which seeds any not-yet-seen week index into the set as collapsed).
+const collapsedWeeks=new Set();
+const _seenWeeks=new Set();
+const myTrips = "https://secure.booking.com/mytrips.html";
+
+// Declared early so functions defined before these elements are populated (e.g. renderTimeline
+// referencing railOfer) don't hit a temporal-dead-zone ReferenceError when called during setup.
+const rail = document.getElementById('rail');
+const railOfer = document.getElementById('railOfer');
+
+const itinerary = [
+  {dates:"Jul 6 – 7",loc:"In Transit",title:"Departure",icon:"✈",color:"#6b6258",
+   hotel:"El Al Flight LY91",
+   lat:35.7636035,lng:140.3859353,mapName:"Narita Airport T1 (arrive Jul 7)",
+   desc:"Depart TLV (T3) 19:15 with Daniel. Arrive Tokyo NRT (T1) 13:20 on Jul 7. Seat 38C.",
+   move:"✈️ Flight LY91 · 12h 05m",
+   commute:{mode:"✈️",len:"12h 05m",frm:"TLV Terminal 3 → Narita T1"},
+   links:[{t:"Flight Email",u:"https://mail.google.com/mail/u/0/#search/El+Al"}]},
+
+  {dates:"Jul 7 – 9",loc:"Tokyo",title:"Tokyo Arrival",icon:"城",color:"#3e6b8c",
+   hotel:"Asakusa Tobu Hotel",
+   festivals:["tanabataTokyo","hozukiAsakusa"],
+   desc:"Land in Tokyo, meet up with Ofer & Itamar — the adventure begins.",
+   lat:35.7113848,lng:139.7974249,mapName:"Asakusa Tobu Hotel",
+   move:"🚆 Train/Taxi from airport to Asakusa · ~1 hr",
+   commute:{mode:"🚆",len:"~1 hr",frm:"Narita Airport → Asakusa",fromLat:35.7636035,fromLng:140.3859353},
+   added:[
+     {name:"On Flagship Store Tokyo Ginza",note:"",lat:35.6712,lng:139.7641},
+     {name:"JINS Ginza",note:"",lat:35.6717,lng:139.7649}
+   ],
+   links:[{t:"Booking",u:myTrips},{t:"Train: Narita → Asakusa (Keisei)",u:"https://www.keisei.co.jp/keisei/tetudou/skyliner/us/traffic/express.php"}]},
+
+  {dates:"Jul 9 – 15",loc:"Nikko",title:"Nikko Nature",icon:"森",color:"#5d6e4a",
+   hotel:"ZEN stay Nikko",
+   lat:36.750634,lng:139.6164525,mapName:"ZEN stay Nikko",
+   desc:"Mountain hikes, Edo Wonderland and cool highland air.",
+   move:"🚄 Tobu Line Asakusa → Nikko · ~2 hrs. 🚗 Pick up rental car in Nikko.",
+   commute:{mode:"🚄",len:"~2 hrs",frm:"Asakusa Station (Tobu Line) → Nikko · then rental car",fromLat:35.7119535,fromLng:139.7983367},
+   tickets:[{n:"Car Rental Voucher",time:"Check Email",u:"https://mail.google.com/mail/u/0/#search/Nikko+Rental+Car"},{n:"Karting · Mobility Resort Motegi",time:"Fri Jul 10 · 14:30",u:""}],
+   added:[
+     {name:"Mobility Resort Motegi (Karting)",note:"Jul 10 · 14:30 · arrive 15 min early · booked for 2 (elementary + junior high)",lat:36.5333,lng:140.2309},
+     {name:"Edo Wonderland",note:"Jul 10",lat:36.7659,lng:139.6168,url:"https://edowonderland.net/en/about/"},
+     {name:"Tobu World Square",note:"Jul 11",lat:36.8078,lng:139.7118},
+     {name:"Kinugawa Rafting NAOC",note:"Jul 12 (Booked)",lat:36.8210,lng:139.7030}
+   ],
+   links:[{t:"Booking",u:myTrips},{t:"Train: Asakusa → Nikko (Tobu)",u:"https://www.tobu.co.jp/en/express_info/timetable.html"},{t:"Edo Wonderland",u:"https://edowonderland.net/en/about/"}]},
+
+  {dates:"Jul 15 – 17",loc:"Tokyo",title:"Naomi Arrives",icon:"会",color:"#3e6b8c",
+   hotel:"Asakusa Tobu Hotel",
+   desc:"Back to Tokyo. Pick up Naomi on Jul 16 — the group is complete! Her El Al LY91 (conf. X9NAF7) lands Narita Terminal 1 at 13:20.",
+   lat:35.7113848,lng:139.7974249,mapName:"Asakusa Tobu Hotel (Naomi pickup base)",
+   move:"🚗 Drop Nikko car · 🚄 Tobu Line Nikko → Asakusa · ~2 hrs.",
+   commute:{mode:"🚄",len:"~2 hrs",frm:"Nikko Station (drop car) → Asakusa",fromLat:36.7478955,fromLng:139.6194787},
+   tickets:[
+     {n:"PICKUP · Leave hotel by 12:45",time:"Thu Jul 16",u:""},
+     {n:"Keisei Access Express · Asakusa → Narita T1 (direct, ~58 min). Board ~13:00",time:"Arrive ~14:00",u:"https://www.rome2rio.com/s/Asakusa/Tokyo-Narita-Airport-NRT"},
+     {n:"Meet Naomi at NRT T1 arrivals",time:"~14:15",u:""}
+   ],
+   links:[{t:"Booking",u:myTrips}]},
+
+  {dates:"Jul 17 – 19",loc:"Kyoto",title:"Kyoto Culture",icon:"⛩",color:"#d6452a",
+   hotel:"Sotetsu Fresa Inn Kyoto-Hachijoguchi",
+   festivals:["gionSakiMatsuri","gionMikoshi","gionYoiyamaPost"],
+   lat:34.9828676,lng:135.7610043,mapName:"Sotetsu Fresa Inn Kyoto",
+   desc:"Evening Pontocho walk, teamLab Biovortex.",
+   move:"🚄 Shinkansen Tokyo → Kyoto · ~2–2.5 hrs",
+   commute:{mode:"🚄",len:"~2–2.5 hrs",frm:"Tokyo Station (Shinkansen) → Kyoto",fromLat:35.6812996,fromLng:139.7670658},
+   tickets:[{n:"teamLab Biovortex",time:"Jul 18 · 11:30 AM",u:"https://kyoto.tickets.teamlab.art/"}],
+   links:[{t:"Booking",u:myTrips},{t:"Shinkansen: Tokyo → Kyoto",u:"https://global.jr-central.co.jp/en/"}]},
+
+  {dates:"Jul 19 – 22",loc:"Nagoya",title:"Water Park Break",icon:"水",color:"#3e6b8c",
+   hotel:"Hotel Forza Nagoya Sakae",
+   lat:35.1653431,lng:136.9062863,mapName:"Hotel Forza Nagoya Sakae",
+   desc:"Big splashy fun at the Nagashima Spa Land Jumbo Pool.",
+   holiday:"marineDay",
+   added:[
+     {name:"Nagoya City Science Museum",note:"Jul 20 · OPEN on Marine Day (closed Tue Jul 21 as make-up day). Sakae · giant planetarium",lat:35.1650768,lng:136.8997026},
+     {name:"Suzuka Circuit",note:"Jul 19 (Sun) · ROTAX MAX karting race on South Course + amusement park. Commute: Kintetsu Line from Kintetsu Nagoya Stn → Shiroko (~50 min) then Mie Kotsu bus → circuit (~20 min). Total ~1.5 hrs. Buy return bus tickets before leaving circuit.",lat:34.8455935,lng:136.5389522,url:"https://www.suzukacircuit.jp/eng/"}
+   ],
+   move:"🚄 Shinkansen Kyoto → Nagoya · ~35 min. 🚆 Local transit to Sakae.",
+   commute:{mode:"🚄",len:"~35 min",frm:"Kyoto Station (Shinkansen) → Nagoya · then local to Sakae",fromLat:34.985849,fromLng:135.7587667},
+   todos:[{t:"Buy Nagashima Spa Land passes",u:"https://www.nagashima-onsen.co.jp/"},{t:"Buy Suzuka Circuit tickets",u:"https://www.suzukacircuit.jp/eng/ticket_s/"}],
+   links:[{t:"Booking",u:myTrips},{t:"Shinkansen: Kyoto → Nagoya",u:"https://global.jr-central.co.jp/en/"},{t:"Suzuka Circuit",u:"https://www.suzukacircuit.jp/eng/"},{t:"Kintetsu → Shiroko",u:"https://www.kintetsu.co.jp/foreign/english/"}]},
+
+  {dates:"Jul 22",loc:"In Transit",title:"Direct to Hokkaido",icon:"✈",color:"#2b3a55",
+   hotel:"ANA Flight NH327",
+   lat:43.8816455,lng:144.1585847,mapName:"Memanbetsu Airport (arrive Jul 22)",
+   desc:"Depart Nagoya (NGO) 14:05 → Memanbetsu (MMB) 16:00. Seats 16C/H/J/K. Meeting Ofer!",
+   move:"✈️ Flight NH327 · 1h 55m",
+   commute:{mode:"✈️",len:"1h 55m",frm:"Nagoya NGO → Memanbetsu MMB",fromLat:34.8573624,fromLng:136.8107557},
+   links:[{t:"Flight Email",u:"https://mail.google.com/mail/u/0/#all/19e4fb0564b6210c"},{t:"ANA Flight Status",u:"https://www.ana.co.jp/fs/dom/en/"}]},
+
+  {dates:"Jul 22 – 25",loc:"Hokkaido (East)",title:"Lakes & Nature",icon:"葉",color:"#5d6e4a",
+   hotel:"Altemina Gahaku (Teshikaga)",
+   lat:43.485348,lng:144.4592988,mapName:"Altemina Gahaku · Teshikaga",
+   desc:"Canoeing, Mt. Iou, Lake Mashu, Sunayu sand baths.",
+   move:"🚗 Pick up minivan (Rentalcars) at Memanbetsu (MMB).",
+   commute:{mode:"🚗",len:"drive",frm:"Memanbetsu Airport (minivan pickup) → Teshikaga",fromLat:43.8816455,fromLng:144.1585847},
+   links:[{t:"Booking",u:myTrips},{t:"Lake Mashu (JNTO)",u:"https://www.japan.travel/en/spot/1861/"}]},
+
+  {dates:"Jul 25 – 27",loc:"Asahikawa",title:"Zoo & Blue Pond",icon:"📷",color:"#3e6b8c",
+   hotel:"kamui84",
+   lat:43.7689713,lng:142.4791319,mapName:"Asahikawa (kamui84 / Asahiyama Zoo)",
+   desc:"Asahiyama Zoo & the Biei Blue Pond.",
+   move:"🚗 Drive via Sounkyo Gorge · ~3.5 hrs.",
+   commute:{mode:"🚗",len:"~3.5 hrs",frm:"Teshikaga → Asahikawa (via Sounkyo Gorge)",fromLat:43.485348,fromLng:144.4592988},
+   links:[{t:"Booking",u:myTrips},{t:"Asahiyama Zoo",u:"https://www.city.asahikawa.hokkaido.jp/asahiyamazoo/"},{t:"Biei Blue Pond (JNTO)",u:"https://www.japan.travel/en/spot/1889/"}]},
+
+  {dates:"Jul 27 – 29",loc:"Rusutsu",title:"Resort & Rides",icon:"🎢",color:"#a8331d",
+   hotel:"ERUSA Rusutsu",
+   lat:42.75152,lng:140.9023879,mapName:"Rusutsu Resort",
+   desc:"Amusement park and Super Jumbo Pool days.",
+   move:"🚗 Drive south to Rusutsu · ~2.5 hrs.",
+   commute:{mode:"🚗",len:"~2.5 hrs",frm:"Asahikawa → Rusutsu",fromLat:43.7689713,fromLng:142.4791319},
+   links:[{t:"Booking",u:myTrips},{t:"Rusutsu Resort",u:"http://www.rusutsu.co.jp/"}]},
+
+  {dates:"Jul 29 – Aug 3",loc:"Sapporo",title:"Sapporo City",icon:"店",color:"#3e6b8c",
+   hotel:"Sapporo Hotel",
+   festivals:["sapporoBeerGarden","tanukiFestival"],
+   lat:43.0572386,lng:141.352677,mapName:"Sapporo (Tanukikoji)",
+   desc:"Shopping in Tanukikoji, Genghis Khan BBQ dinner with Ofer.",
+   move:"🚗 Drive Rusutsu → Sapporo · ~1.5 hrs. Drop rental car on arrival.",
+   commute:{mode:"🚗",len:"~1.5 hrs",frm:"Rusutsu → Sapporo (drop rental on arrival)",fromLat:42.75152,fromLng:140.9023879},
+   links:[{t:"Booking",u:"https://secure.booking.com/mytrips.html"},{t:"Tanukikoji Shopping St.",u:"https://www.visit-hokkaido.jp/en/spot/detail_10003.html"}]},
+
+  {dates:"Aug 3",loc:"In Transit",title:"Back to Tokyo",icon:"✈",color:"#2b3a55",
+   hotel:"AIRDO Flight ADO 020",
+   lat:42.7791317,lng:141.6866364,mapName:"New Chitose Airport (depart Aug 3)",
+   desc:"Depart Sapporo (CTS) 12:20 → Tokyo Haneda (HND) 14:00. Seats 29B/C/D/E.",
+   move:"✈️ Flight ADO 020 · 1h 40m",
+   commute:{mode:"✈️",len:"1h 40m",frm:"Sapporo CTS → Tokyo Haneda HND",fromLat:42.7791317,fromLng:141.6866364},
+   links:[{t:"Flight Email",u:"https://mail.google.com/mail/u/0/#all/19e5586509ed0c75"},{t:"AIRDO Flight Status",u:"https://www.airdo.jp/en/flight-status/"}]},
+
+  {dates:"Aug 3 – 6",loc:"Tokyo",title:"Final Days",icon:"⛩",color:"#d6452a",
+   hotel:"Lab8 Tokyo (Shibuya)",
+   lat:35.658,lng:139.7016,mapName:"Lab8 Tokyo · Shibuya",
+   desc:"teamLab Planets, last shopping runs (Ginza / Akihabara), goodbye Tokyo.",
+   move:"🚆 Based in Shibuya — central for everything.",
+   commute:{mode:"🚆",len:"—",frm:"Haneda → Shibuya (Lab8); based here",fromLat:35.5482964,fromLng:139.7779951},
+   tickets:[
+     {n:"teamLab Planets",time:"Book ahead — limited entry",u:"https://planets.teamlab.art/tokyo/"},
+     {n:"Return Flight · El Al LY92 (NRT → TLV) · conf. Y4AWC3",time:"Aug 6",u:"https://mail.google.com/mail/u/0/#search/El+Al+LY92"}
+   ],
+   links:[{t:"Booking",u:myTrips}]},
+];
+
+// ---- Ofer's parallel trip (Nakasendo hike + Hokkaido East), simplified: date, route, sleep, notes ----
+// Source: Japan_hike_2026.xlsx — "Nakasendo" + "Day by Day plan" + "Hokkaido East" sheets.
+// Deliberately excludes distance/km, breakfast/dinner, and booking status per Anat's request.
+// Ofer's entire route uses one consistent color, distinct from every color used in
+// Anat's itinerary, so the two routes are never confused on the map.
+const OFER_COLOR = "#7a4f8c";
+
+const oferTrip = [
+  {dates:"Jun 18 – 21",loc:"In Transit",title:"Flights to Japan",icon:"✈",color:OFER_COLOR,
+   sleep:"Boutique Hotel Atrium München (Jun 18, Munich layover)",
+   lat:48.1374,lng:11.5755,mapName:"Munich (flight layover)",
+   desc:"TLV → MUC → Haneda, then train to Karuizawa to start the Nakasendō hike."},
+
+  {dates:"Jun 21",loc:"Karuizawa",title:"Trail Start",icon:"⛰",color:OFER_COLOR,
+   sleep:"Hotel Karuizawa Cross",
+   lat:36.3486,lng:138.6332,mapName:"Karuizawa",
+   desc:"Haneda → Karuizawa by train (~2h). Start of the Nakasendō trail."},
+
+  {dates:"Jun 22",loc:"Miota",title:"Day 1 · Karuizawa → Miota",icon:"🥾",color:OFER_COLOR,
+   sleep:"西軽井沢ホテル atelier bla by LONGINGHOUSE",
+   lat:36.3000,lng:138.5167,mapName:"Miota",
+   desc:"Gentle downhill from Karuizawa into the plains. Forest paths and some road walking."},
+
+  {dates:"Jun 23",loc:"Saku",title:"Day 2 · Miota → Saku",icon:"🥾",color:OFER_COLOR,
+   sleep:"Nakagome 3-23-2, Saku",
+   lat:36.2486,lng:138.4797,mapName:"Saku",
+   desc:"Longer day with gradual climbs through rural countryside, rice fields, views toward Yatsugatake."},
+
+  {dates:"Jun 24",loc:"Akakura no Mori",title:"Day 3 · Saku → Akakura no Mori",icon:"🥾",color:OFER_COLOR,
+   sleep:"Akakura no Mori Auto Camping Ground",
+   lat:36.2978,lng:138.4244,mapName:"Akakura no Mori Camping Ground",
+   desc:"Gentle rolling hills, forest and farmland. Camping night."},
+
+  {dates:"Jun 25",loc:"Suwa",title:"Day 4 · Akakura no Mori → Suwa",icon:"🥾",color:OFER_COLOR,
+   sleep:"Kamisuwa Onsen Shinyu",
+   lat:36.0391,lng:138.1140,mapName:"Suwa",
+   desc:"Descend toward Lake Suwa — onsen town, shrines, lake views."},
+
+  {dates:"Jun 26",loc:"Suwa",title:"Day 5 · Rest in Suwa",icon:"♨",color:OFER_COLOR,
+   sleep:"Kamisuwa Onsen Shinyu",
+   lat:36.0391,lng:138.1140,mapName:"Suwa",
+   desc:"Rest day — Suwa Taisha Shrine, lake promenade, onsen soak."},
+
+  {dates:"Jun 27",loc:"Shiojiri",title:"Day 6 · Suwa → Shiojiri",icon:"🥾",color:OFER_COLOR,
+   sleep:"Hotel Route-Inn Shiojiri",
+   lat:36.1107,lng:137.9544,mapName:"Shiojiri",
+   desc:"Connecting day into wine country and apple orchards."},
+
+  {dates:"Jun 28",loc:"Narai",title:"Day 7 · Shiojiri → Narai (Torii Pass) ⚠️",icon:"🥾",color:OFER_COLOR,
+   sleep:"御宿 美里屋, Narai",
+   lat:35.9234,lng:137.7741,mapName:"Narai",
+   desc:"Longest sustained climb of the trip: Torii Pass (1,197m). One of the best-preserved post towns."},
+
+  {dates:"Jun 29",loc:"Kiso-Fukushima",title:"Day 8 · Narai → Kiso-Fukushima",icon:"🥾",color:OFER_COLOR,
+   sleep:"HOTELwaiwaiyakiso",
+   lat:35.8453,lng:137.7984,mapName:"Kiso-Fukushima",
+   desc:"Scenic descent into the Kiso Valley — historical checkpoint town, museums, hot springs."},
+
+  {dates:"Jun 30",loc:"Suhara",title:"Day 9 · Kiso-Fukushima → Suhara",icon:"🥾",color:OFER_COLOR,
+   sleep:"Minshuku Suhara",
+   lat:35.6953,lng:137.6894,mapName:"Suhara",
+   desc:"Descend through forested valleys to a small, atmospheric post town."},
+
+  {dates:"Jul 1",loc:"Tsumago",title:"Day 10 · Suhara → Tsumago",icon:"🥾",color:OFER_COLOR,
+   sleep:"Daikichi, Tsumago",
+   lat:35.6037,lng:137.6088,mapName:"Tsumago",
+   desc:"Pleasant section along the Kiso River, more rural walking, less climbing."},
+
+  {dates:"Jul 2",loc:"Magome",title:"Day 11 · Tsumago → Magome 🌟",icon:"🥾",color:OFER_COLOR,
+   sleep:"Magome Chaya",
+   lat:35.5341,lng:137.5631,mapName:"Magome",
+   desc:"Iconic finale of the Kiso Valley hike — forest trail, waterfalls, stone paths into Magome-juku."},
+
+  {dates:"Jul 3 – 5",loc:"Kyoto",title:"Kyoto",icon:"⛩",color:OFER_COLOR,
+   sleep:"Daiwa Roynet Hotel Kyoto Terrace Hachijo PREMIER",
+   lat:34.9858,lng:135.7588,mapName:"Kyoto",
+   desc:"Train to Kyoto. Ramen cooking class, teamLab BioVortex (Jul 4, 11:00)."},
+
+  {dates:"Jul 6 – 8",loc:"Tokyo",title:"Tokyo — Meet the Family",icon:"会",color:OFER_COLOR,
+   sleep:"Asakusa Tobu Hotel",
+   lat:35.7114,lng:139.7974,mapName:"Asakusa Tobu Hotel",
+   desc:"Train to Tokyo. First meet-up point with the family in Asakusa."},
+
+  {dates:"Jul 9 – 14",loc:"Daisetsuzan",title:"Daisetsuzan National Park",icon:"⛰",color:OFER_COLOR,
+   sleep:"Sounkaku / 層雲峡温泉ホテル雲井 / Bear Monte (Higashikawa)",
+   lat:43.6817,lng:142.8553,mapName:"Daisetsuzan (Sounkyo)",
+   desc:"Fly Tokyo NRT → Asahikawa, pick up rental car. 3 days of day hikes: Sounkyo Gorge, Ginga Waterfall, Soubaku Dai."},
+
+  {dates:"Jul 14 – 17",loc:"Kushiro",title:"Kushiro",icon:"🏙",color:OFER_COLOR,
+   sleep:"Kushiro Century Castle Hotel",
+   lat:42.9849,lng:144.3820,mapName:"Kushiro",
+   desc:"Drive to Asahikawa Airport, bus to Shintoku, train to Kushiro. Starting point of the 12-day Hokkaido East hike."},
+
+  {dates:"Jul 17",loc:"Toro",title:"Toro",icon:"🥾",color:OFER_COLOR,
+   sleep:"Kushiro Marshland Hostel THE GEEK",
+   lat:43.0247,lng:144.4736,mapName:"Toro",
+   desc:"Hike from Kushiro toward the marshland."},
+
+  {dates:"Jul 18",loc:"Shibecha",title:"Shibecha",icon:"🥾",color:OFER_COLOR,
+   sleep:"Hotel Terreno Kisen",
+   lat:43.1494,lng:144.5933,mapName:"Shibecha",
+   desc:"Continuing the Hokkaido East hike."},
+
+  {dates:"Jul 19 – 20",loc:"Teshikaga",title:"Teshikaga",icon:"🥾",color:OFER_COLOR,
+   sleep:"Atreyu",
+   lat:43.3794,lng:144.5544,mapName:"Teshikaga",
+   desc:"Option to hike Lake Mashu from here."},
+
+  {dates:"Jul 21 – 22",loc:"Lake Kusharo",title:"Lake Kusharo",icon:"🥾",color:OFER_COLOR,
+   sleep:"Kussharo Prince Hotel",
+   lat:43.6275,lng:144.3294,mapName:"Lake Kusharo",
+   desc:"Hike around Lake Kusharo, Japan's largest caldera lake."},
+
+  {dates:"Jul 23 – 24",loc:"Lake Mashu",title:"Lake Mashu",icon:"🥾",color:OFER_COLOR,
+   sleep:"ARtINn 極寒藝術伝染装置",
+   lat:43.583,lng:144.517,mapName:"Lake Mashu",
+   desc:"Hike to Lake Mashu, famed for 'Mashu Blue' water clarity."},
+
+  {dates:"Jul 25",loc:"Midori-cho",title:"Midori-cho",icon:"🥾",color:OFER_COLOR,
+   sleep:"Shiretoko Neko cottage",
+   lat:43.7547,lng:144.3781,mapName:"Midori-cho",
+   desc:"Hike and train day toward Shiretoko."},
+
+  {dates:"Jul 26",loc:"Kiyosato",title:"Kiyosato Onsen",icon:"🥾",color:OFER_COLOR,
+   sleep:"Kiyosato Onsen Hotel Ryokuseisou",
+   lat:43.8536,lng:144.4072,mapName:"Kiyosato",
+   desc:"Sakura Falls nearby."},
+
+  {dates:"Jul 27",loc:"Shari",title:"Shari (Shiretoko)",icon:"🥾",color:OFER_COLOR,
+   sleep:"SEKKA SHIRETOKO",
+   lat:43.9097,lng:144.6644,mapName:"Shari",
+   desc:"Approaching the Shiretoko Peninsula."},
+
+  {dates:"Jul 28 – 29",loc:"Utoro",title:"Utoro (Shiretoko)",icon:"🥾",color:OFER_COLOR,
+   sleep:"The SUNSET Shiretoko",
+   lat:44.0667,lng:144.9167,mapName:"Utorokagawa",
+   desc:"End of the 12-day Hokkaido East hike, on the Shiretoko coast."},
+
+  {dates:"Jul 30",loc:"Abashiri",title:"Abashiri",icon:"🏙",color:OFER_COLOR,
+   sleep:"Dormy Inn Abashiri",
+   lat:44.0206,lng:144.2733,mapName:"Abashiri",
+   desc:"Bus from Utoro Spa Terminal (9:20 AM). City tour day."},
+
+  {dates:"Jul 31 – Aug 1",loc:"Asahikawa",title:"Asahikawa",icon:"🏙",color:OFER_COLOR,
+   sleep:"Dormy Inn Asahikawa",
+   lat:43.7696,lng:142.3650,mapName:"Asahikawa",
+   desc:"Train from Abashiri. City tour day."},
+
+  {dates:"Aug 2 – 4",loc:"Sapporo",title:"Sapporo",icon:"🏙",color:OFER_COLOR,
+   sleep:"LAMP LIGHT BOOKS HOTEL Sapporo",
+   lat:43.0621,lng:141.3544,mapName:"Sapporo",
+   desc:"Odori Park, Mt. Moiwa, Nakajima Park, Maruyama Park."},
+
+  {dates:"Aug 5 – 7",loc:"Tokyo",title:"Tokyo — Reunite Before Flying Home 🤝",icon:"✈",color:OFER_COLOR,
+   sleep:"Lab8 Tokyo",
+   lat:35.658,lng:139.7016,mapName:"Lab8 Tokyo · Shibuya",
+   desc:"Flight Sapporo → Tokyo. Final stretch before flying home Aug 7 — second meet-up point with the family."},
+];
+
+// Pristine snapshot of what's baked into THIS file, captured before localStorage/Firebase
+// can touch it. "Resync from this file" restores from here, so it always reflects whatever
+// was last uploaded to GitHub, not whatever got clobbered by an older cloud copy on load.
+const PRISTINE_ITINERARY = JSON.parse(JSON.stringify(itinerary));
+const PRISTINE_OFER = JSON.parse(JSON.stringify(oferTrip));
+
+// ---- Shared sync via Firebase Realtime Database ----
+// Local cache keys (used for instant load + offline fallback only — Firebase is the source of truth)
+const EDIT_STORAGE_KEY = 'japanTrip2026_edits';
+const ADDED_STORAGE_KEY = 'japanTrip2026_added';
+
+const firebaseConfig = {
+  apiKey: "AIzaSyDarDW6e2NvfEYCDqV_I7blLqJh37Lpgd0",
+  authDomain: "japantrip-2026.firebaseapp.com",
+  databaseURL: "https://japantrip-2026-default-rtdb.europe-west1.firebasedatabase.app",
+  projectId: "japantrip-2026",
+  storageBucket: "japantrip-2026.firebasestorage.app",
+  messagingSenderId: "634455170484",
+  appId: "1:634455170484:web:1eeea1ceea2684980766e1"
+};
+
+let fbApp=null, fbDb=null, fbReady=false;
+let suppressNextWrite=false; // true while we're applying a remote update, so we don't echo it straight back
+
+function applyEditsSnapshot(saved){
+  if(!Array.isArray(saved)) return;
+  saved.forEach((edits,i)=>{
+    if(!edits || !itinerary[i]) return;
+    Object.keys(edits).forEach(field=>{ itinerary[i][field]=edits[field]; });
+  });
+}
+function applyAddedSnapshot(saved){
+  if(!Array.isArray(saved)) return;
+  saved.forEach((arr,i)=>{
+    if(!Array.isArray(arr) || !itinerary[i]) return;
+    itinerary[i].added = arr;
+  });
+}
+
+// ---- Local cache (instant first paint, offline fallback) ----
+function loadSavedEdits(){
+  try{
+    const raw = localStorage.getItem(EDIT_STORAGE_KEY);
+    if(!raw) return;
+    applyEditsSnapshot(JSON.parse(raw));
+  }catch(e){ console.warn('Could not load saved edits', e); }
+}
+function loadSavedAdded(){
+  try{
+    const raw = localStorage.getItem(ADDED_STORAGE_KEY);
+    if(!raw) return;
+    applyAddedSnapshot(JSON.parse(raw));
+  }catch(e){ console.warn('Could not load saved attractions', e); }
+}
+function cacheEditsLocally(){
+  try{
+    const snapshot = itinerary.map(it=>({dates:it.dates,loc:it.loc,title:it.title,hotel:it.hotel,desc:it.desc,move:it.move}));
+    localStorage.setItem(EDIT_STORAGE_KEY, JSON.stringify(snapshot));
+  }catch(e){ console.warn('Could not cache edits', e); }
+}
+function saveAddedAttractions(){
+  try{
+    const snapshot = itinerary.map(it=>it.added||[]);
+    localStorage.setItem(ADDED_STORAGE_KEY, JSON.stringify(snapshot));
+  }catch(e){ console.warn('Could not cache attractions', e); }
+  pushAddedToFirebase();
+}
+loadSavedEdits();
+loadSavedAdded();
+
+// ---- Firebase: connect, pull latest shared state, then listen live ----
+function setSyncStatus(state){
+  // state: 'connecting' | 'synced' | 'offline'
+  const el=document.getElementById('syncStatus');
+  if(!el) return;
+  el.classList.remove('connecting','synced','offline');
+  el.classList.add(state);
+  el.textContent = state==='synced' ? '🟢 Synced with family'
+                  : state==='offline' ? '🔴 Offline — showing last saved version'
+                  : '🟡 Connecting…';
+}
+
+function pushEditsToFirebase(){
+  if(!fbReady || suppressNextWrite) return;
+  const snapshot = {};
+  itinerary.forEach((it,i)=>{ snapshot[i]={dates:it.dates,loc:it.loc,title:it.title,hotel:it.hotel,desc:it.desc,move:it.move}; });
+  fbDb.ref('trip/edits').set(snapshot).catch(e=>console.warn('Firebase edits write failed',e));
+}
+function pushAddedToFirebase(){
+  if(!fbReady || suppressNextWrite) return;
+  const snapshot = {};
+  itinerary.forEach((it,i)=>{ snapshot[i]=it.added||[]; });
+  fbDb.ref('trip/added').set(snapshot).catch(e=>console.warn('Firebase added write failed',e));
+}
+
+function initFirebaseSync(){
+  if(typeof firebase==='undefined'){ setSyncStatus('offline'); return; }
+  try{
+    fbApp = firebase.initializeApp(firebaseConfig);
+    fbDb = firebase.database();
+  }catch(e){ console.warn('Firebase init failed', e); setSyncStatus('offline'); return; }
+
+  setSyncStatus('connecting');
+
+  // Connection state indicator
+  fbDb.ref('.info/connected').on('value', snap=>{
+    if(snap.val()===true) setSyncStatus('synced');
+    else setSyncStatus('offline');
+  });
+
+  // Live listen: edits
+  fbDb.ref('trip/edits').on('value', snap=>{
+    const val=snap.val();
+    fbReady=true;
+    if(val){
+      const arr=[]; Object.keys(val).forEach(k=>{ arr[parseInt(k,10)]=val[k]; });
+      suppressNextWrite=true;
+      applyEditsSnapshot(arr);
+      cacheEditsLocally();
+      // Debounce: wait 300ms before re-rendering so a Firebase echo from our own write
+      // doesn't interrupt a card the user just tapped open.
+      clearTimeout(window._fbRenderT);
+      window._fbRenderT=setTimeout(()=>{ renderTimeline(); drawMarkers(); }, 300);
+      suppressNextWrite=false;
+    } else {
+      pushEditsToFirebase();
+    }
+  }, err=>{ console.warn('Firebase edits listen error', err); setSyncStatus('offline'); });
+
+  // Live listen: added attractions
+  fbDb.ref('trip/added').on('value', snap=>{
+    const val=snap.val();
+    fbReady=true;
+    if(val){
+      const arr=[]; Object.keys(val).forEach(k=>{ arr[parseInt(k,10)]=val[k]; });
+      suppressNextWrite=true;
+      applyAddedSnapshot(arr);
+      try{ localStorage.setItem(ADDED_STORAGE_KEY, JSON.stringify(itinerary.map(it=>it.added||[]))); }catch(e){}
+      clearTimeout(window._fbRenderT);
+      window._fbRenderT=setTimeout(()=>{ renderTimeline(); drawMarkers(); }, 300);
+      suppressNextWrite=false;
+    } else {
+      pushAddedToFirebase();
+    }
+  }, err=>{ console.warn('Firebase added listen error', err); setSyncStatus('offline'); });
+}
+
+// Japanese national holidays during your trip window (Jul 6 – Aug 6, 2026)
+const holidays = {
+  marineDay: {
+    name:"Marine Day · 海の日",
+    date:"Mon, Jul 20, 2026",
+    blurb:"National holiday honoring the sea. Creates a 3-day weekend (Sat 18 – Mon 20). Aquariums, ports and beaches host events; expect bigger crowds at theme parks.",
+    where:"Nagoya (you'll be here)",
+    events:[
+      {name:"Nagoya Port Festival (Minato Matsuri) · 80th edition",
+       lat:35.0890873, lng:136.8821738,
+       note:"Jul 20 · Garden Pier, Minato Ward · free · 5 min from Nagoyako Station (Meiko Line, Exit 3). Dashi float parade + so-odori dance confirmed; fireworks expected canceled this year (Garden Pier prep for Asian Games). Check official site."}
+    ]
+  }
+};
+
+// Local seasonal festivals that overlap your dates (not national holidays — separate layer)
+const festivals = {
+  tanabataTokyo: {
+    name:"Tanabata · Star Festival",
+    when:"Jul 7 (arrival day)",
+    blurb:"Annual celebration of the celestial lovers Orihime and Hikoboshi. Tokyo marks it with bamboo streamers and tanzaku — paper strips you write a wish on and tie to bamboo branches. Low-key, family-friendly, easy add for arrival day.",
+    lat:35.7113848, lng:139.7974249,
+    where:"Shrines & shopping streets across Tokyo"
+  },
+  hozukiAsakusa: {
+    name:"Hōzuki-ichi · Lantern Plant Market at Sensō-ji",
+    when:"Jul 9–10 (morning of Jul 9 fits your schedule before Nikko)",
+    blurb:"~120 vendor stalls selling Chinese lantern plants (hōzuki) on the grounds of Sensō-ji. Buddhist tradition holds that praying here on these dates earns 46,000 days of merit. You're staying steps away in Asakusa.",
+    lat:35.7147651, lng:139.7966553,
+    where:"Sensō-ji, Asakusa (5 min walk from your hotel)"
+  },
+  gionSakiMatsuri: {
+    name:"Gion Matsuri · Saki-matsuri Grand Parade (Yamaboko Junkō)",
+    when:"Jul 17 · arrival day in Kyoto",
+    blurb:"The main parade of one of Japan's three greatest festivals. 23 towering hand-pulled floats (some 25m tall, 12 tonnes) wind through central Kyoto from ~9:00 to ~13:00. UNESCO Intangible Cultural Heritage. Huge crowds, intense July heat — paid grandstand seats sell out months ahead.",
+    lat:35.0036559, lng:135.7785534,
+    where:"Shijō-Karasuma area, central Kyoto"
+  },
+  gionMikoshi: {
+    name:"Gion Matsuri · Mikoshi Togyo (Shinkōsai)",
+    when:"Jul 17 evening · ~16:00 ceremony, mikoshi leave shrine ~18:00",
+    blurb:"After the grand parade, three portable shrines (mikoshi) are carried from Yasaka Shrine through lantern-lit streets. Less famous than the float procession but more atmospheric and easier to watch.",
+    lat:35.0036559, lng:135.7785534,
+    where:"From Yasaka Shrine through Gion"
+  },
+  gionYoiyamaPost: {
+    name:"Gion Matsuri · Yoiyama post-festival nights",
+    when:"Jul 21–23 evenings (6pm–11pm)",
+    blurb:"Streets close to traffic, illuminated floats line the lanes, food stalls everywhere. The quieter, more atmospheric cousin of the famous pre-festival Yoiyama. ⚠️ Note: you'll be in Nagoya these dates, not Kyoto — but worth knowing if plans shift.",
+    lat:35.0036559, lng:135.7785534,
+    where:"Downtown Kyoto"
+  },
+  sapporoBeerGarden: {
+    name:"Sapporo Odori Beer Garden",
+    when:"Jul 23 – Aug 18 (full overlap with your stay)",
+    blurb:"Japan's largest open-air beer garden takes over Odori Park — 9,000+ seats, six sections by brewer (incl. craft & German imports), Hokkaido food (jingisukan, fresh seafood). Lively, family-tolerant atmosphere; kids welcome with parents during day hours.",
+    lat:43.0607521, lng:141.3544308,
+    where:"Odori Park, central Sapporo"
+  },
+  tanukiFestival: {
+    name:"73rd Tanuki Festival",
+    when:"Jul 23 – Aug 18 (overlaps your stay)",
+    blurb:"The Tanukikoji shopping arcade transforms with lanterns, mikoshi parades, and late-night sales. Already your planned shopping street! Look for the night market and tanuki mikoshi parade on selected dates.",
+    lat:43.0572386, lng:141.352677,
+    where:"Tanukikoji Shopping Street, Sapporo"
+  }
+};
+
+const recs = [
+  {tag:"Theme Park",c:"#d6452a",h:"Universal Studios (USJ)",
+   p:"The runaway favorite for teens in the group. One parent whose teen sulked through Disney said they came alive at Universal. Super Nintendo World is the draw. Buy Express/Fast passes ahead.",
+   where:"Osaka — avoid Sat–Sun", lat:34.6654, lng:135.4323},
+  {tag:"Arcade · VR",c:"#2b3a55",h:"Tokyo Joypolis",
+   p:"Indoor Sega amusement park in Odaiba — VR rides and a small indoor coaster. A parent noted the teens loved it and would've enjoyed it even more if they were older (younger kids were too short for some rides).",
+   where:"Odaiba, Tokyo", lat:35.6256, lng:139.7756},
+  {tag:"Digital Art",c:"#5d6e4a",h:"teamLab (Planets / Biovortex)",
+   p:"Universally loved across ages. Planets is the more sensory one — a room you wade through water in, another you crawl through. Strictly one-way, so timed entry matters. Already on your plan for Kyoto + Tokyo.",
+   where:"Tokyo (Planets) · Kyoto (Biovortex)", lat:35.6499, lng:139.7903},
+  {tag:"Thrill Seekers",c:"#a8331d",h:"Fuji-Q Highland",
+   p:"For brave teens and adults only — described in the group as 'insane,' with some of the most extreme coasters in Japan. Great Mt. Fuji views as a bonus.",
+   where:"Fujiyoshida, near Mt. Fuji", lat:35.4876, lng:138.7807},
+  {tag:"Pop Culture",c:"#c08a2d",h:"Akihabara & Pokémon",
+   p:"Group members flagged Akihabara for gaming and gadgets, and the new Pokémon park as a hot ticket (book early — it sells out). Pokémon hotel rooms are also a fun splurge for fans.",
+   where:"Akihabara, Tokyo", lat:35.7022, lng:139.7745},
+  {tag:"Where to Stay",c:"#3e6b8c",h:"Asakusa as a base",
+   p:"Repeatedly recommended for families: quieter and cheaper than Shibuya/Shinjuku, still close to attractions, ~30 min to the buzzy districts. Good restaurants, less shoulder-to-shoulder crowding.",
+   where:"Asakusa, Tokyo"},
+  {tag:"Arcade · Sports",c:"#5d6e4a",h:"Round1 (Spo-Cha)",
+   p:"Giant indoor entertainment complex on a pay-by-time, unlimited-play system: bowling, karaoke, darts, billiards, ping pong, basketball, plus a huge arcade. The 'Spo-Cha' sports zone is the teen magnet. Kids 13+ can go in without a parent (signed waiver) — great for letting Naomi and the teens loose. Go on a weekday and grab the 3-hour pack for value. Branches that fit your route: Tokyo (Odaiba DiverCity & Tokyo Dome City), Takatsuki (between Kyoto & Osaka), Nagoya, and Sapporo.",
+   where:"Tokyo · Kyoto-area (Takatsuki) · Nagoya · Sapporo", lat:35.6256, lng:139.7745},
+  {q:true,text:"\"Teens, adults, babies — these are all great ages for Japan.\" The group's consensus: 10 and 12½ are a sweet spot. Old enough for the thrill rides, young enough to still love the deer in Nara.",
+   by:"— Community guide, Traveling Japan with Kids"},
+];
+
+// ---- Build timeline (re-runnable) ----
+function legBodyHTML(it,i){
+  const ticketsHTML = (it.tickets||[]).map(t=>
+    t.u
+      ? `<a class="ticket" href="${t.u}" target="_blank">🎟 ${t.n} · <strong>${t.time}</strong></a>`
+      : `<div class="ticket">🎟 ${t.n} · <strong>${t.time}</strong></div>`).join('');
+  const todosHTML = (it.todos||[]).map(t=>
+    `<a class="todo" href="${t.u}" target="_blank">▢ ${t.t}</a>`).join('');
+  const addedHTML = (it.added||[]).map((a,ai)=>
+    `<div class="todo added-row" style="background:rgba(93,110,74,.12);border-color:rgba(93,110,74,.45);color:#41502f">
+      <span class="added-txt">📍 ${a.url?`<a href="${a.url}" target="_blank" style="color:inherit;text-decoration:underline">${a.name}</a>`:a.name}${a.note?` · <strong>${a.note}</strong>`:''}</span>
+      <span class="added-actions">
+        <button class="added-edit" data-idx="${i}" data-added-idx="${ai}" title="Edit">✎</button>
+        <button class="added-del" data-idx="${i}" data-added-idx="${ai}" title="Remove">✕</button>
+      </span>
+    </div>`).join('');
+  const linksHTML = (it.links||[]).map(l=>
+    `<a href="${l.u}" target="_blank">${l.t}</a>`).join('');
+  const hol=it.holiday && holidays[it.holiday];
+  let holidayHTML='';
+  if(hol){
+    const isAdded = (name)=> (it.added||[]).some(a=>a.name===name);
+    const eventsHTML = (hol.events||[]).map((ev,ei)=>{
+      const already = isAdded(ev.name);
+      return `<div class="hol-ev">
+        <div class="hol-ev-txt"><b>${ev.name}</b><br><span>${ev.note}</span></div>
+        ${already
+          ? `<span class="hol-ev-btn done">✓ Added</span>`
+          : `<button class="hol-ev-btn" data-hol="${it.holiday}" data-leg-key="${it.dates}" data-ev="${ei}">＋ Add to itinerary</button>`}
+      </div>`;
+    }).join('');
+    holidayHTML = `
+      <div class="hol-block">
+        <div class="hol-head">🎌 <b>${hol.name}</b> · ${hol.date}</div>
+        <div class="hol-blurb">${hol.blurb}</div>
+        ${eventsHTML?`<div class="hol-events"><div class="hol-events-title">Local events you can add:</div>${eventsHTML}</div>`:''}
+      </div>`;
+  }
+
+  // Festivals (local events overlapping this leg)
+  let festHTML='';
+  if(it.festivals && it.festivals.length){
+    const isAdded = (name)=> (it.added||[]).some(a=>a.name===name);
+    const rows = it.festivals.map(fk=>{
+      const fv=festivals[fk]; if(!fv) return '';
+      const already=isAdded(fv.name);
+      return `<div class="hol-ev fest-ev">
+        <div class="hol-ev-txt"><b>${fv.name}</b><br><span>${fv.when} · ${fv.where}<br>${fv.blurb}</span></div>
+        ${already
+          ? `<span class="hol-ev-btn done">✓ Added</span>`
+          : `<button class="hol-ev-btn fest" data-fest="${fk}" data-leg-key="${it.dates}">＋ Add to itinerary</button>`}
+      </div>`;
+    }).join('');
+    festHTML = `
+      <div class="fest-block">
+        <div class="hol-head">🎉 <b>Festivals during this stay</b></div>
+        ${rows}
+      </div>`;
+  }
+  return `
+    <div class="hotel"><span class="htext" contenteditable="false" data-field="hotel" data-idx="${i}">${it.hotel}</span></div>
+    <div class="desc" contenteditable="false" data-field="desc" data-idx="${i}">${it.desc}</div>
+    <div class="move"><span class="mtext" contenteditable="false" data-field="move" data-idx="${i}">${it.move}</span></div>
+    ${holidayHTML}
+    ${festHTML}
+    ${(ticketsHTML||todosHTML||addedHTML)?`<div class="tickets">${ticketsHTML}${todosHTML}${addedHTML}</div>`:''}
+    ${linksHTML?`<div class="links">${linksHTML}</div>`:''}`;
+}
+
+// ---- Week-aligned columns ----
+// Cards stack normally (no per-card date math, no overlap bugs). Both columns are split into
+// week-long blocks (Monday-anchored, starting from the earliest date across both trips). After
+// each week's cards render in both columns, whichever column is shorter that week gets a blank
+// spacer added so both columns reach the same height before the next week's divider — keeping
+// the week dividers level with each other even though card counts per week differ wildly.
+const MONTH_MAP={Jan:0,Feb:1,Mar:2,Apr:3,May:4,Jun:5,Jul:6,Aug:7,Sep:8,Oct:9,Nov:10,Dec:11};
+function parseLegStartDate(dateStr){
+  if(!dateStr) return null;
+  const m=dateStr.match(/^([A-Za-z]{3})\s+(\d{1,2})/);
+  if(!m) return null;
+  const month=MONTH_MAP[m[1]];
+  if(month===undefined) return null;
+  const day=parseInt(m[2],10);
+  return new Date(2026,month,day);
+}
+const DAY_MS=24*60*60*1000;
+function mondayOnOrBefore(d){
+  const day=d.getDay(); // 0=Sun..6=Sat
+  const back=(day+6)%7; // days since most recent Monday
+  return new Date(d.getFullYear(),d.getMonth(),d.getDate()-back);
+}
+function weekLabel(monday){
+  const opts={month:'short',day:'numeric'};
+  return 'Week of '+monday.toLocaleDateString('en-US',opts);
+}
+
+function realignBothRails(){
+  if(!rail || !railOfer) return;
+  const allDates=[...itinerary,...oferTrip].map(it=>parseLegStartDate(it.dates)).filter(Boolean);
+  if(!allDates.length) return;
+  const firstMonday=mondayOnOrBefore(new Date(Math.min(...allDates)));
+  _lastAnchor=firstMonday;
+
+  function weekIndexOf(it){
+    const d=parseLegStartDate(it.dates);
+    if(!d) return null;
+    return Math.floor((mondayOnOrBefore(d)-firstMonday)/(7*DAY_MS));
+  }
+
+  // Step 1: Remove only dividers and spacers — leave .leg cards exactly where they are.
+  // This means cards never leave the DOM, so there's no scroll-jump, no focus loss, no
+  // open/closed state reset — only the structural week-chrome gets rebuilt.
+  function stripChrome(railEl){
+    railEl.querySelectorAll('.week-divider, .week-spacer').forEach(el=>el.remove());
+  }
+  stripChrome(rail);
+  stripChrome(railOfer);
+
+  // Step 2: Group the now-bare .leg elements by week — they're still in their original
+  // document order inside each rail, so we just read them and categorise.
+  function groupByWeek(railEl, items){
+    const legEls=Array.from(railEl.querySelectorAll(':scope > .leg'));
+    const byWeek=new Map();
+    legEls.forEach((el,i)=>{
+      const wk=weekIndexOf(items[i]);
+      const key=wk===null?'_unknown':wk;
+      if(!byWeek.has(key)) byWeek.set(key,[]);
+      byWeek.get(key).push(el);
+    });
+    return byWeek;
+  }
+
+  const myWeeks=groupByWeek(rail, itinerary);
+  const oferWeeks=groupByWeek(railOfer, oferTrip);
+
+  const maxWeek=Math.max(
+    ...[...myWeeks.keys()].filter(k=>k!=='_unknown'),
+    ...[...oferWeeks.keys()].filter(k=>k!=='_unknown'),
+    0
+  );
+
+  // Measure the real on-screen gap between consecutive .leg cards from the rendered DOM.
+  function legGapPx(){
+    const FALLBACK=17.6;
+    for(const railEl of [rail, railOfer]){
+      const kids=railEl ? Array.from(railEl.querySelectorAll(':scope > .leg')) : [];
+      if(kids.length>=2 && typeof kids[0].getBoundingClientRect==='function'){
+        const a=kids[0].getBoundingClientRect();
+        const b=kids[1].getBoundingClientRect();
+        const gap=b.top-a.bottom;
+        if(gap>0 && gap<200) return gap;
+      }
+    }
+    return FALLBACK;
+  }
+  const LEG_GAP=legGapPx();
+
+  // Step 3: Walk weeks in order, surgically inserting a week-divider before the first card
+  // of each week (or at the right position when a side has no cards that week), then a
+  // spacer after the last card to equalise heights — all via insertBefore/after, never
+  // touching the .leg nodes themselves.
+  for(let wk=0; wk<=maxWeek; wk++){
+    const myCards=myWeeks.get(wk)||[];
+    const oferCards=oferWeeks.get(wk)||[];
+    if(myCards.length===0 && oferCards.length===0) continue;
+
+    if(!_seenWeeks.has(wk)){ _seenWeeks.add(wk); collapsedWeeks.add(wk); }
+    const isCollapsed=collapsedWeeks.has(wk);
+
+    myCards.forEach(el=>el.classList.toggle('wk-collapsed', isCollapsed));
+    oferCards.forEach(el=>el.classList.toggle('wk-collapsed', isCollapsed));
+
+    const myH = isCollapsed ? 0 : myCards.reduce((sum,el)=>sum+el.offsetHeight+LEG_GAP, 0);
+    const oferH = isCollapsed ? 0 : oferCards.reduce((sum,el)=>sum+el.offsetHeight+LEG_GAP, 0);
+
+    const monday=new Date(firstMonday.getTime()+wk*7*DAY_MS);
+    const label=weekLabel(monday);
+
+    // Insert divider before this week's first card on each side (or append to rail if no cards).
+    function insertDivider(railEl, cards, count){
+      const div=document.createElement('div');
+      div.className='week-divider'+(isCollapsed?' collapsed':'');
+      div.dataset.wk=wk;
+      div.innerHTML=`<span class="wk-chev">▾</span><span>${label}</span>`+
+        `<span class="wk-count">${count} ${count===1?'stop':'stops'}</span>`;
+      if(cards.length) railEl.insertBefore(div, cards[0]);
+      else railEl.appendChild(div);
+      return div;
+    }
+    insertDivider(rail, myCards, myCards.length);
+    insertDivider(railOfer, oferCards, oferCards.length);
+
+    // Insert spacer after this week's last card (or after the divider just added if no cards).
+    const diff=Math.abs(myH-oferH);
+    if(diff>4){
+      const spacer=document.createElement('div');
+      spacer.className='week-spacer';
+      spacer.style.height=diff+'px';
+      if(myH<oferH){
+        const anchor=myCards.length ? myCards[myCards.length-1] : rail.lastElementChild;
+        anchor.after(spacer);
+      } else {
+        const anchor=oferCards.length ? oferCards[oferCards.length-1] : railOfer.lastElementChild;
+        anchor.after(spacer);
+      }
+    }
+  }
+}
+
+function renderTimeline(){
+  // Track which legs were open by their itinerary index (data-idx), not DOM child position —
+  // child positions shift when realignBothRails inserts dividers/spacers, making index-based
+  // restoration silently wrong and causing cards to snap closed on every re-render.
+  const wasOpen = new Set();
+  rail.querySelectorAll('.leg.open .dates[data-idx]').forEach(el=>wasOpen.add(el.dataset.idx));
+  rail.innerHTML='';
+  itinerary.forEach((it,i)=>{
+    const el=document.createElement('div');
+    el.className='leg';
+    el.style.animationDelay=(i*0.05)+'s';
+    const addedBadge=(it.added&&it.added.length)?`<span class="added-badge">+${it.added.length} added</span>`:'';
+    const hol=it.holiday && holidays[it.holiday];
+    const holBadge=hol?`<span class="holiday-badge">🎌 ${hol.date.split(',')[1].trim()}</span>`:'';
+    const fcount=(it.festivals||[]).length;
+    const festBadge=fcount?`<span class="fest-badge">🎉 ${fcount} fest${fcount>1?'s':''}</span>`:'';
+    el.innerHTML=`
+      <div class="dot" style="background:${it.color}">${it.icon}</div>
+      <div class="card">
+        <div class="card-top" onclick="if(!document.body.classList.contains('editing')){ this.closest('.leg').classList.toggle('open'); }">
+          <div class="meta">
+            <div class="dates" contenteditable="false" data-field="dates" data-idx="${i}">${it.dates}</div>
+            <div class="loc" contenteditable="false" data-field="loc" data-idx="${i}">${it.loc}</div>
+            <h3><span class="ttext" contenteditable="false" data-field="title" data-idx="${i}">${it.title}</span>${addedBadge}${holBadge}${festBadge}</h3>
+          </div>
+          <div class="chev">▼</div>
+        </div>
+        <div class="body"><div class="body-inner">${legBodyHTML(it,i)}</div></div>
+      </div>`;
+    rail.appendChild(el);
+  });
+  if(wasOpen.size){
+    rail.querySelectorAll('.leg').forEach((el,i)=>{
+      const idx=el.querySelector('[data-idx]')?.dataset.idx;
+      if(idx && wasOpen.has(idx)) el.classList.add('open');
+    });
+  } else {
+    rail.querySelector('.leg')?.classList.add('open');
+  }
+  if(typeof editing!=='undefined' && editing){
+    rail.querySelectorAll('[data-field]').forEach(el=>el.setAttribute('contenteditable','true'));
+  }
+  if(typeof railOfer!=='undefined' && railOfer) realignBothRails();
+}
+renderTimeline();
+
+// ---- Ofer's parallel trip (simplified, read-only timeline) ----
+function renderOferTimeline(){
+  if(!railOfer) return;
+  const wasOpen = new Set();
+  railOfer.querySelectorAll('.leg.open [data-ofer-idx]').forEach(el=>wasOpen.add(el.dataset.oferIdx));
+  railOfer.innerHTML='';
+  oferTrip.forEach((it,i)=>{
+    const el=document.createElement('div');
+    el.className='leg';
+    el.style.animationDelay=(i*0.04)+'s';
+    el.innerHTML=`
+      <div class="dot" style="background:${it.color}" data-ofer-idx="${i}">${it.icon}</div>
+      <div class="card">
+        <div class="card-top" onclick="this.closest('.leg').classList.toggle('open')">
+          <div class="meta">
+            <div class="dates">${it.dates}</div>
+            <div class="loc">${it.loc}</div>
+            <h3>${it.title}</h3>
+          </div>
+          <div class="chev">▼</div>
+        </div>
+        <div class="body"><div class="body-inner">
+          <div class="hotel">${it.sleep}</div>
+          <div class="desc">${it.desc}</div>
+        </div></div>
+      </div>`;
+    railOfer.appendChild(el);
+  });
+  if(wasOpen.size){
+    railOfer.querySelectorAll('.leg').forEach((el,i)=>{
+      if(wasOpen.has(String(i))) el.classList.add('open');
+    });
+  } else {
+    railOfer.querySelector('.leg')?.classList.add('open');
+  }
+  if(typeof rail!=='undefined' && rail) realignBothRails();
+}
+renderOferTimeline();
+window.addEventListener('resize', ()=>{ clearTimeout(window._realignT); window._realignT=setTimeout(realignBothRails,150); });
+
+// Card heights are measured for week-block alignment as soon as the timeline renders, which
+// can happen before the web fonts (Zen Maru Gothic / Fraunces) finish loading — text then
+// reflows to its final size once the real font swaps in, silently invalidating those early
+// measurements. Re-running realign once fonts are confirmed ready corrects for that.
+if(document.fonts && document.fonts.ready){
+  document.fonts.ready.then(()=>{ try{ realignBothRails(); }catch(_){} });
+}
+
+initFirebaseSync();
+
+// Holiday & festival event quick-add (event delegation on the timeline)
+rail.addEventListener('click', e=>{
+  const btn = e.target.closest('.hol-ev-btn:not(.done)');
+  if(!btn) return;
+  e.stopPropagation();
+  const legKey = btn.dataset.legKey;
+  const leg = itinerary.find(l=>l.dates===legKey);
+  if(!leg) return;
+  let entry=null;
+  if(btn.dataset.hol){
+    const hol=holidays[btn.dataset.hol];
+    const ev=hol && hol.events && hol.events[parseInt(btn.dataset.ev,10)];
+    if(ev) entry={name:ev.name, note:ev.note, lat:ev.lat, lng:ev.lng};
+  } else if(btn.dataset.fest){
+    const fv=festivals[btn.dataset.fest];
+    if(fv) entry={name:fv.name, note:`${fv.when} · ${fv.where}`, lat:fv.lat, lng:fv.lng};
+  }
+  if(!entry) return;
+  (leg.added=leg.added||[]).push(entry);
+  saveAddedAttractions();
+  renderTimeline();
+  const all=rail.querySelectorAll('.leg');
+  const idx=itinerary.indexOf(leg);
+  if(all[idx]) all[idx].classList.add('open');
+  if(typeof drawMarkers==='function') try{ drawMarkers(); }catch(_){}
+});
+
+// Week-block collapse/expand — linked across both columns. Expanding or collapsing a week
+// on either side does the same on the other, since the two timelines are meant to be browsed
+// together. Delegated on both rails so it keeps working after realignBothRails rebuilds them.
+function handleWeekDividerClick(e){
+  const div=e.target.closest('.week-divider');
+  if(!div) return;
+  const wk=parseInt(div.dataset.wk,10);
+  if(isNaN(wk)) return;
+  if(collapsedWeeks.has(wk)) collapsedWeeks.delete(wk); else collapsedWeeks.add(wk);
+  realignBothRails();
+}
+rail.addEventListener('click', handleWeekDividerClick);
+railOfer.addEventListener('click', handleWeekDividerClick);
+
+// ---- Build recs (Teen Picks tab) ----
+const grid=document.getElementById('recGrid');
+recs.forEach(r=>{
+  const el=document.createElement('div');
+  if(r.q){
+    el.className='quote';
+    el.innerHTML=`${r.text}<span>${r.by}</span>`;
+  }else{
+    el.className='rec';
+    el.style.setProperty('--c',r.c);
+    el.innerHTML=`<span class="tag">${r.tag}</span><h4>${r.h}</h4><p>${r.p}</p><div class="where">${r.where}</div>`;
+  }
+  grid.appendChild(el);
+});
+
+// ---- MAP (itinerary stops only) ----
+let lmap, markerGroup, oferMarkerGroup;
+function makeIcon(label,color,added){
+  return L.divIcon({className:'',html:`<div class="pin${added?' added':''}" style="background:${color}"><span>${label}</span></div>`,
+    iconSize:[30,30],iconAnchor:[15,30],popupAnchor:[0,-30]});
+}
+function makeDepIcon(mode){
+  return L.divIcon({className:'',html:`<div class="dep-pin"><span>${mode}</span></div>`,
+    iconSize:[24,24],iconAnchor:[12,12],popupAnchor:[0,-12]});
+}
+function makeOferIcon(label,color){
+  return L.divIcon({className:'',html:`<div class="pin ofer-pin" style="background:${color}"><span>${label}</span></div>`,
+    iconSize:[26,26],iconAnchor:[13,26],popupAnchor:[0,-26]});
+}
+function initMap(){
+  if(lmap) return;
+  if(typeof L==='undefined'){
+    document.getElementById('leafmap').innerHTML=
+      '<div style="display:grid;place-items:center;height:100%;text-align:center;padding:2rem;color:#8a7e70;font-size:.9rem">The map library couldn\'t load — check your internet connection and reopen, or view the numbered stops in the legend below.</div>';
+    return;
+  }
+  lmap=L.map('leafmap',{scrollWheelZoom:true}).setView([38.5,140],5);
+  L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png',
+    {attribution:'© OpenStreetMap, © CARTO',maxZoom:19}).addTo(lmap);
+  markerGroup=L.featureGroup().addTo(lmap);
+  oferMarkerGroup=L.featureGroup().addTo(lmap);
+  drawMarkers();
+}
+function drawMarkers(){
+  const locWrap=document.getElementById('legendLocations');
+  const comWrap=document.getElementById('legendCommute');
+  locWrap.innerHTML=''; comWrap.innerHTML='';
+  const haveMap = (typeof L!=='undefined') && markerGroup;
+  if(haveMap) markerGroup.clearLayers();
+  const legMarkers={};
+
+  // --- pre-pass: find stops sharing the same coordinate and fan them out ---
+  const groups={};
+  itinerary.forEach((it,idx)=>{
+    if(typeof it.lat!=='number') return;
+    const key=it.lat.toFixed(4)+','+it.lng.toFixed(4);
+    (groups[key]=groups[key]||[]).push(idx);
+  });
+  const offset={}; // idx -> display {lat,lng}
+  const R=0.012; // ~1.3 km ring radius, enough to separate at city zoom
+  Object.values(groups).forEach(idxs=>{
+    if(idxs.length===1){
+      const it=itinerary[idxs[0]];
+      offset[idxs[0]]={lat:it.lat,lng:it.lng};
+    }else{
+      idxs.forEach((idx,k)=>{
+        const it=itinerary[idx];
+        const ang=(2*Math.PI*k)/idxs.length - Math.PI/2;
+        offset[idx]={lat:it.lat + R*Math.sin(ang), lng:it.lng + R*Math.cos(ang)};
+      });
+    }
+  });
+
+  function focusLeg(idx){
+    const ref=legMarkers[idx];
+    if(!ref || !haveMap) return;
+    lmap.flyTo([ref.pos.lat,ref.pos.lng], 13, {duration:.8});
+    lmap.once('moveend',()=>ref.marker.openPopup());
+  }
+  function focusDeparture(idx){
+    const ref=depMarkers[idx];
+    if(ref && haveMap){
+      lmap.flyTo([ref.pos.lat,ref.pos.lng], 12, {duration:.8});
+      lmap.once('moveend',()=>ref.marker.openPopup());
+    } else {
+      // no separate departure point (e.g. origin abroad) — fall back to the leg pin
+      focusLeg(idx);
+    }
+  }
+
+  const depMarkers={};
+  let n=0;
+  itinerary.forEach((it,idx)=>{
+    if(typeof it.lat!=='number') return;
+    n++;
+    const pos=offset[idx]||{lat:it.lat,lng:it.lng};
+    if(haveMap){
+      const m=L.marker([pos.lat,pos.lng],{icon:makeIcon(n,it.color,false)});
+      const addedList=(it.added||[]).map(a=>`<br>📍 ${a.name}${a.note?` — ${a.note}`:''}`).join('');
+      m.bindPopup(`<div class="leaf-pop"><div class="pop-dates">${it.dates}</div><b>${n}. ${it.title}</b><br>${it.mapName||it.hotel}${addedList}</div>`);
+      markerGroup.addLayer(m);
+      legMarkers[idx]={marker:m,pos};
+      (it.added||[]).forEach(a=>{
+        if(typeof a.lat==='number'){
+          const am=L.marker([a.lat,a.lng],{icon:makeIcon('+','#5d6e4a',true)});
+          am.bindPopup(`<div class="leaf-pop"><b>${a.name}</b><br><span class="pop-dates">Added to ${it.dates} · ${it.title}</span>${a.note?'<br>'+a.note:''}</div>`);
+          markerGroup.addLayer(am);
+        }
+      });
+      // departure-point marker for this leg's commute (small ◇ pin)
+      if(it.commute && typeof it.commute.fromLat==='number'){
+        const dpos={lat:it.commute.fromLat,lng:it.commute.fromLng};
+        const dm=L.marker([dpos.lat,dpos.lng],{icon:makeDepIcon(it.commute.mode||'🧭'),zIndexOffset:-200});
+        dm.bindPopup(`<div class="leaf-pop"><div class="pop-dates">Depart · ${it.dates}</div><b>${it.commute.mode||''} ${it.commute.len}</b><br>${it.commute.frm}</div>`);
+        markerGroup.addLayer(dm);
+        depMarkers[idx]={marker:dm,pos:dpos};
+        // Route line: departure point → arrival pin, styled by transport mode
+        const mode=it.commute.mode||'';
+        const isAir=mode.includes('✈');
+        const isTrain=mode.includes('🚄')||mode.includes('🚆');
+        const routeColor=isAir?'#3e6b8c':isTrain?'#5d6e4a':it.color;
+        const dash=isAir?'6,10':isTrain?'8,5':null;
+        const lineOpts={color:routeColor,weight:2,opacity:.55};
+        if(dash) lineOpts.dashArray=dash;
+        L.polyline([[dpos.lat,dpos.lng],[pos.lat,pos.lng]],lineOpts).addTo(markerGroup);
+      }
+    }
+
+    const isLocation = it.loc!=='In Transit';
+
+    // --- LOCATIONS column: only the stay legs ---
+    if(isLocation){
+      const lg=document.createElement('div');
+      lg.className='lg';
+      const addedCount=(it.added||[]).length;
+      lg.innerHTML=`<span class="num" style="background:${it.color}">${n}</span>`+
+        `<span class="lg-txt"><b>${it.loc}</b> · ${it.hotel}<br>`+
+        `<span style="opacity:.55">${it.dates}</span></span>`+
+        `${addedCount?`<span class="added-badge">+${addedCount}</span>`:''}`;
+      if(haveMap){ lg.classList.add('clickable'); lg.addEventListener('click',()=>focusLeg(idx)); }
+      locWrap.appendChild(lg);
+    }
+
+    // --- COMMUTE column: every leg's travel ---
+    if(it.commute){
+      const c=it.commute;
+      const cg=document.createElement('div');
+      cg.className='lg commute-row';
+      cg.innerHTML=`<span class="num com" style="background:${it.color}">${c.mode||'🧭'}</span>`+
+        `<span class="lg-txt"><b>${c.len}</b><br>`+
+        `<span style="opacity:.7">${c.frm}</span></span>`;
+      if(haveMap){ cg.classList.add('clickable'); cg.addEventListener('click',()=>focusDeparture(idx)); }
+      comWrap.appendChild(cg);
+    }
+  });
+  if(haveMap){ try{ lmap.fitBounds(markerGroup.getBounds().pad(0.12)); }catch(e){} }
+
+  // ---- Ofer's route: pins + dashed connecting line, toggleable ----
+  const oferWrap=document.getElementById('legendOfer');
+  const oferToggle=document.getElementById('toggleOferMap');
+  if(oferWrap) oferWrap.innerHTML='';
+  if(haveMap && oferMarkerGroup) oferMarkerGroup.clearLayers();
+  const showOfer = !oferToggle || oferToggle.checked;
+  if(showOfer){
+    const linePts=[];
+    oferTrip.forEach((it,idx)=>{
+      if(typeof it.lat!=='number') return;
+      linePts.push([it.lat,it.lng]);
+      if(haveMap){
+        const m=L.marker([it.lat,it.lng],{icon:makeOferIcon(idx+1,it.color)});
+        m.bindPopup(`<div class="leaf-pop"><div class="pop-dates">${it.dates} · Ofer</div><b>${idx+1}. ${it.title}</b><br>${it.mapName||it.sleep}</div>`);
+        oferMarkerGroup.addLayer(m);
+      }
+      if(oferWrap){
+        const lg=document.createElement('div');
+        lg.className='lg';
+        lg.innerHTML=`<span class="num" style="background:${it.color}">${idx+1}</span>`+
+          `<span class="lg-txt"><b>${it.loc}</b> · ${it.sleep}<br>`+
+          `<span style="opacity:.55">${it.dates}</span></span>`;
+        if(haveMap){
+          lg.classList.add('clickable');
+          lg.addEventListener('click',()=>{
+            lmap.flyTo([it.lat,it.lng],12,{duration:.8});
+            lmap.once('moveend',()=>{
+              oferMarkerGroup.eachLayer(layer=>{
+                const ll=layer.getLatLng();
+                if(Math.abs(ll.lat-it.lat)<1e-6 && Math.abs(ll.lng-it.lng)<1e-6) layer.openPopup();
+              });
+            });
+          });
+        }
+        oferWrap.appendChild(lg);
+      }
+    });
+    if(haveMap && linePts.length>1){
+      L.polyline(linePts,{color:OFER_COLOR,weight:3,dashArray:'8,8',opacity:.75}).addTo(oferMarkerGroup);
+    }
+  }
+}
+
+// ---- ADD ATTRACTION form ----
+const addForm=document.getElementById('addForm');
+const addFormTitle=addForm.querySelector('h4');
+const saveAddBtn=document.getElementById('saveAdd');
+const pickPreset=document.getElementById('pickPreset');
+const pickName=document.getElementById('pickName');
+const pickLeg=document.getElementById('pickLeg');
+const pickNote=document.getElementById('pickNote');
+const pickLat=document.getElementById('pickLat');
+const pickLng=document.getElementById('pickLng');
+const pickLink=document.getElementById('pickLink');
+
+let editingAdded=null; // {legIdx, addedIdx} when editing an existing entry, else null
+
+// populate preset dropdown from placeable recs
+recs.filter(r=>!r.q && typeof r.lat==='number').forEach((r,i)=>{
+  const o=document.createElement('option');
+  o.value=i; o.textContent=r.h; o.dataset.lat=r.lat; o.dataset.lng=r.lng;
+  pickPreset.appendChild(o);
+});
+// populate leg dropdown (only legs with a location)
+itinerary.forEach((it,i)=>{
+  if(typeof it.lat!=='number') return;
+  const o=document.createElement('option');
+  o.value=i; o.textContent=`${it.dates} · ${it.title} (${it.loc})`;
+  pickLeg.appendChild(o);
+});
+pickPreset.addEventListener('change',()=>{
+  const opt=pickPreset.selectedOptions[0];
+  if(opt && opt.value!==''){ pickName.value=opt.textContent; }
+});
+
+function resetAddForm(){
+  editingAdded=null;
+  pickPreset.value=''; pickName.value=''; pickNote.value=''; pickLat.value=''; pickLng.value=''; pickLink.value=''; pickName.style.borderColor='';
+  addFormTitle.textContent='Add an attraction';
+  saveAddBtn.textContent='Add to plan';
+}
+function openAddForm(){
+  addForm.hidden=false;
+  // The form lives in the Map panel — switch to that tab so it's actually visible
+  const mapTab=document.querySelector('.tab[data-panel="map"]');
+  if(mapTab && !mapTab.classList.contains('active')) mapTab.click();
+  setTimeout(()=>addForm.scrollIntoView({behavior:'smooth',block:'center'}), 50);
+}
+function openEditForm(legIdx,addedIdx){
+  const leg=itinerary[legIdx];
+  const entry=leg && leg.added && leg.added[addedIdx];
+  if(!entry) return;
+  resetAddForm();
+  editingAdded={legIdx,addedIdx};
+  pickName.value=entry.name||'';
+  pickNote.value=entry.note||'';
+  pickLat.value=(typeof entry.lat==='number')?entry.lat:'';
+  pickLng.value=(typeof entry.lng==='number')?entry.lng:'';
+  pickLink.value=entry.url||'';
+  pickLeg.value=String(legIdx);
+  addFormTitle.textContent='Edit attraction';
+  saveAddBtn.textContent='Save changes';
+  openAddForm();
+}
+
+document.getElementById('openAdd').addEventListener('click',()=>{
+  if(addForm.hidden){ resetAddForm(); openAddForm(); }
+  else { addForm.hidden=true; }
+});
+document.getElementById('cancelAdd').addEventListener('click',()=>{addForm.hidden=true; resetAddForm();});
+
+// Edit / delete buttons on existing "added" attractions (event delegation)
+rail.addEventListener('click', e=>{
+  const editBtn=e.target.closest('.added-edit');
+  const delBtn=e.target.closest('.added-del');
+  if(editBtn){
+    e.stopPropagation();
+    openEditForm(parseInt(editBtn.dataset.idx,10), parseInt(editBtn.dataset.addedIdx,10));
+    return;
+  }
+  if(delBtn){
+    e.stopPropagation();
+    const legIdx=parseInt(delBtn.dataset.idx,10);
+    const addedIdx=parseInt(delBtn.dataset.addedIdx,10);
+    const leg=itinerary[legIdx];
+    if(!leg || !leg.added) return;
+    if(!confirm(`Remove "${leg.added[addedIdx]?.name}" from this leg?`)) return;
+    leg.added.splice(addedIdx,1);
+    saveAddedAttractions();
+    renderTimeline();
+    drawMarkers();
+  }
+});
+
+document.getElementById('saveAdd').addEventListener('click',()=>{
+  const name=pickName.value.trim();
+  if(!name){ pickName.focus(); pickName.style.borderColor='var(--vermilion)'; return; }
+  const legIdx=parseInt(pickLeg.value,10);
+  const leg=itinerary[legIdx];
+  const entry={name, note:pickNote.value.trim()};
+  const linkVal=pickLink.value.trim();
+  if(linkVal) entry.url=linkVal;
+  const opt=pickPreset.selectedOptions[0];
+  const manualLat=parseFloat(pickLat.value);
+  const manualLng=parseFloat(pickLng.value);
+  if(!isNaN(manualLat) && !isNaN(manualLng)){
+    entry.lat=manualLat; entry.lng=manualLng;
+  } else if(opt && opt.value!==''){
+    entry.lat=parseFloat(opt.dataset.lat); entry.lng=parseFloat(opt.dataset.lng);
+  }
+
+  if(editingAdded){
+    const oldLeg=itinerary[editingAdded.legIdx];
+    if(oldLeg && oldLeg.added){
+      if(editingAdded.legIdx===legIdx){
+        oldLeg.added[editingAdded.addedIdx]=entry;
+      } else {
+        // moved to a different leg: remove from old, push onto new
+        oldLeg.added.splice(editingAdded.addedIdx,1);
+        (leg.added=leg.added||[]).push(entry);
+      }
+    }
+  } else {
+    (leg.added=leg.added||[]).push(entry);
+  }
+  saveAddedAttractions();
+  // reset + close
+  resetAddForm();
+  addForm.hidden=true;
+  renderTimeline();
+  drawMarkers();
+  // jump to map so they see the result
+  document.querySelector('.tab[data-panel="map"]').click();
+});
+
+// ---- Tabs ----
+document.querySelectorAll('.tab').forEach(t=>{
+  t.addEventListener('click',()=>{
+    document.querySelectorAll('.tab').forEach(x=>x.classList.remove('active'));
+    document.querySelectorAll('.panel').forEach(x=>x.classList.remove('active'));
+    t.classList.add('active');
+    document.getElementById(t.dataset.panel).classList.add('active');
+    if(t.dataset.panel==='map'){ initMap(); drawMarkers(); setTimeout(()=>lmap&&lmap.invalidateSize(),120); }
+  });
+});
+
+document.getElementById('toggleOferMap')?.addEventListener('change', drawMarkers);
+
+// ---- Mobile swipe-hint dots (itinerary tab, <900px) ----
+// The two rail columns become a horizontally swipeable carousel below 900px. These dots
+// reflect which column is currently in view and let a tap jump straight to either one.
+(function setupSwipeHint(){
+  const wrap=document.getElementById('railsWrap');
+  const hint=document.getElementById('swipeHint');
+  if(!wrap || !hint) return;
+  const dots=Array.from(hint.querySelectorAll('.dot'));
+  dots.forEach(dot=>{
+    dot.addEventListener('click', ()=>{
+      const idx=parseInt(dot.dataset.target,10);
+      wrap.scrollTo({left: idx*wrap.clientWidth, behavior:'smooth'});
+    });
+  });
+  let scrollT=null;
+  wrap.addEventListener('scroll', ()=>{
+    clearTimeout(scrollT);
+    scrollT=setTimeout(()=>{
+      const idx = wrap.clientWidth>0 ? Math.round(wrap.scrollLeft/wrap.clientWidth) : 0;
+      dots.forEach((dot,i)=>dot.classList.toggle('active', i===idx));
+    }, 60);
+  }, {passive:true});
+})();
+
+// ---- EDIT MODE ----
+const editToggle=document.getElementById('editToggle');
+const saveBtn=document.getElementById('saveBtn');
+const exportBtn=document.getElementById('exportBtn');
+const resetBtn=document.getElementById('resetBtn');
+const resyncBtn=document.getElementById('resyncBtn');
+const editStatus=document.getElementById('editStatus');
+const editHint=document.getElementById('editHint');
+
+function hasSavedEdits(){
+  try{ return !!localStorage.getItem(EDIT_STORAGE_KEY); }catch(e){ return false; }
+}
+function refreshSavedButtons(){
+  const has=hasSavedEdits();
+  resetBtn.classList.toggle('show', editing && has);
+  exportBtn.classList.toggle('show', editing);
+  resyncBtn.classList.toggle('show', editing);
+}
+
+function setEditing(on){
+  editing=on;
+  document.body.classList.toggle('editing',on);
+  editToggle.classList.toggle('on',on);
+  editToggle.textContent = on ? '✓ Done editing' : '✎ Edit itinerary';
+  editHint.classList.toggle('show',on);
+  document.querySelectorAll('#rail [data-field]').forEach(el=>{
+    el.setAttribute('contenteditable', on ? 'true' : 'false');
+  });
+  saveBtn.classList.toggle('show', on);
+  refreshSavedButtons();
+  if(!on && dirty){
+    // leaving edit mode with unsaved live edits: re-render to clean state from itinerary array
+    // (edits already pulled live into itinerary on blur, so just refresh map/legend)
+    drawMarkers();
+  }
+}
+
+editToggle.addEventListener('click',()=>setEditing(!editing));
+
+// Pull a contenteditable field's text/html back into the itinerary array on edit
+rail.addEventListener('blur', e=>{
+  const el=e.target;
+  if(!el.matches || !el.matches('[data-field]')) return;
+  const idx=parseInt(el.dataset.idx,10);
+  const field=el.dataset.field;
+  if(isNaN(idx) || !itinerary[idx]) return;
+  const val = (el.textContent||'').trim();
+  if(itinerary[idx][field]===val) return;
+  itinerary[idx][field]=val;
+  dirty=true;
+  editStatus.classList.remove('show');
+  // Dates/location changes affect the timeline rail order labels & map legend/popups
+  if(field==='dates' || field==='loc' || field==='title' || field==='hotel'){
+    drawMarkers();
+  }
+}, true);
+
+// Prevent Enter from inserting newlines in single-line fields (dates, loc, title, hotel)
+rail.addEventListener('keydown', e=>{
+  const el=e.target;
+  if(!el.matches || !el.matches('[data-field]')) return;
+  const multiline = (el.dataset.field==='desc' || el.dataset.field==='move');
+  if(e.key==='Enter' && !multiline){
+    e.preventDefault();
+    el.blur();
+  }
+});
+
+saveBtn.addEventListener('click',()=>{
+  cacheEditsLocally();
+  pushEditsToFirebase();
+  dirty=false;
+  editStatus.textContent='Saved ✓';
+  editStatus.classList.add('show');
+  setTimeout(()=>editStatus.classList.remove('show'),2200);
+  refreshSavedButtons();
+});
+
+resetBtn.addEventListener('click',()=>{
+  if(!confirm('Discard your saved edits and restore the original itinerary text for everyone?')) return;
+  try{ localStorage.removeItem(EDIT_STORAGE_KEY); }catch(e){}
+  if(fbReady && fbDb){ fbDb.ref('trip/edits').remove().catch(()=>{}); }
+  location.reload();
+});
+
+resyncBtn.addEventListener('click', async ()=>{
+  const ok=confirm(
+    'This pushes the itinerary baked into THIS page (as last uploaded to GitHub) to everyone, '+
+    'overwriting whatever is currently saved in the shared database — including any attractions '+
+    'someone else added that never made it back into the file. Use this after updating the file '+
+    'itself (e.g. after I\'ve added something for you) to make sure that version "wins". Continue?'
+  );
+  if(!ok) return;
+  // Restore the pristine, file-baked itinerary into the live array, then push it everywhere.
+  const restored = JSON.parse(JSON.stringify(PRISTINE_ITINERARY));
+  restored.forEach((it,i)=>{ itinerary[i]=it; });
+  renderTimeline();
+  drawMarkers();
+  cacheEditsLocally();
+  try{ localStorage.setItem(ADDED_STORAGE_KEY, JSON.stringify(itinerary.map(it=>it.added||[]))); }catch(e){}
+  // Bypass the suppress guard in case a remote listener just fired — this resync should always win.
+  suppressNextWrite=false;
+  pushEditsToFirebase();
+  pushAddedToFirebase();
+  editStatus.textContent='Resynced ✓';
+  editStatus.classList.add('show');
+  setTimeout(()=>editStatus.classList.remove('show'),2500);
+});
+
+// ---- EXPORT updated HTML (bakes current itinerary[] back into the page source) ----
+exportBtn.addEventListener('click',()=>{
+  // Make sure any focused field's edits are committed first
+  if(document.activeElement && document.activeElement.matches && document.activeElement.matches('[data-field]')){
+    document.activeElement.blur();
+  }
+  fetch(location.href).then(r=>r.text()).then(html=>{
+    // Re-stringify the current itinerary array (with edits) and splice it into the source.
+    // We locate the "const itinerary = [...]" block by matching from declaration to its
+    // closing "];" — relies on the array literal not containing the literal sequence "\n];".
+    const startMarker='const itinerary = [';
+    const start=html.indexOf(startMarker);
+    if(start===-1){ alert('Could not locate itinerary data in page source — export aborted.'); return; }
+    const endMarker='\n];';
+    const end=html.indexOf(endMarker, start);
+    if(end===-1){ alert('Could not locate end of itinerary data — export aborted.'); return; }
+    const newArrayBody = JSON.stringify(itinerary, null, 2);
+    const newDecl = 'const itinerary = ' + newArrayBody + ';';
+    const newHtml = html.slice(0,start) + newDecl + html.slice(end+2); // +2 skips "\n]" leaving trailing ";"
+    const blob=new Blob([newHtml],{type:'text/html'});
+    const a=document.createElement('a');
+    a.href=URL.createObjectURL(blob);
+    a.download='japan-trip-2026.html';
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+  }).catch(()=>{
+    alert('Export needs the page to be loaded via http(s) (not file://) for the fetch step. Your edits are still saved in this browser via "Save changes".');
+  });
+});
+
+refreshSavedButtons();
+
+// ---- PWA: register service worker + handle "Install app" ----
+if('serviceWorker' in navigator){
+  window.addEventListener('load',()=>{
+    navigator.serviceWorker.register('sw.js').catch(()=>{/* non-fatal */});
+  });
+}
+
+let deferredInstallPrompt=null;
+const installBtn=document.getElementById('installBtn');
+window.addEventListener('beforeinstallprompt',(e)=>{
+  e.preventDefault();
+  deferredInstallPrompt=e;
+  if(installBtn) installBtn.hidden=false;
+});
+if(installBtn){
+  installBtn.addEventListener('click', async ()=>{
+    if(!deferredInstallPrompt) return;
+    deferredInstallPrompt.prompt();
+    await deferredInstallPrompt.userChoice;
+    deferredInstallPrompt=null;
+    installBtn.hidden=true;
+  });
+}
+window.addEventListener('appinstalled',()=>{
+  if(installBtn) installBtn.hidden=true;
+});
+// Already installed / running standalone → no need to show the button
+if(window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone){
+  if(installBtn) installBtn.hidden=true;
+}
+
+// iOS Safari has no beforeinstallprompt — show a manual hint instead
+const iosHint=document.getElementById('iosHint');
+const isIOS=/iphone|ipad|ipod/i.test(navigator.userAgent) && !window.MSStream;
+const isStandalone=window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone;
+if(isIOS && !isStandalone && iosHint){
+  iosHint.hidden=false;
+}
+</script>
+</body>
+</html>
