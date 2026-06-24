@@ -111,6 +111,26 @@ if (typeof L === 'undefined') {
   .stat.act{border-color:rgba(192,138,45,.45)}
   .stat.act .big{color:var(--gold)}
   .stat .mark{position:absolute;top:1.1rem;right:1.2rem;font-size:1.3rem;opacity:.4}
+  /* Today stat */
+  .stat.today-stat{border-color:rgba(214,69,42,.5);background:linear-gradient(135deg,#fdf5f0,var(--paper))}
+  .stat.today-stat .big{color:var(--vermilion);font-size:1.2rem;line-height:1.2}
+  .stat.today-stat .countdown{font-family:'Zen Maru Gothic';font-size:2rem;font-weight:700;color:var(--vermilion);line-height:1}
+  .stat.today-stat .cdlabel{font-size:.78rem;color:#8a7e70;margin-top:.2rem}
+  /* Today card highlight in the timeline */
+  .leg.today-leg>.card{
+    border-color:var(--vermilion);
+    box-shadow:0 0 0 2px rgba(214,69,42,.25), var(--shadow);
+  }
+  .leg.today-leg>.card .card-top::before{
+    content:"TODAY";font-size:.62rem;font-weight:700;letter-spacing:.12em;
+    color:var(--vermilion);background:rgba(214,69,42,.1);border-radius:4px;
+    padding:.1rem .4rem;margin-right:.5rem;
+  }
+  /* Pulsing map pin for today */
+  @keyframes todayPulse{0%,100%{box-shadow:0 0 0 0 rgba(214,69,42,.6),0 3px 8px rgba(0,0,0,.4)}70%{box-shadow:0 0 0 8px rgba(214,69,42,0),0 3px 8px rgba(0,0,0,.4)}}
+  .pin.today-pin{animation:todayPulse 1.8s ease infinite}
+  @keyframes oferTodayPulse{0%,100%{box-shadow:0 0 0 0 rgba(122,79,140,.7),0 3px 8px rgba(122,79,140,.5)}70%{box-shadow:0 0 0 8px rgba(122,79,140,0),0 3px 8px rgba(122,79,140,.5)}}
+  .pin.ofer-today-pin{animation:oferTodayPulse 1.8s ease infinite}
 
   /* ---------- TABS ---------- */
   .tabs{display:flex;gap:.4rem;justify-content:center;margin:2.5rem 0 .5rem;flex-wrap:wrap}
@@ -437,10 +457,10 @@ if (typeof L === 'undefined') {
       <div class="big">All Booked</div>
       <div class="mark">✓</div>
     </div>
-    <div class="stat act">
-      <div class="label">Action Required</div>
-      <div class="big">Tickets</div>
-      <div class="mark">!</div>
+    <div class="stat today-stat" id="todayStat">
+      <div class="label">Today</div>
+      <div class="big" id="todayBig">—</div>
+      <div class="mark">📅</div>
     </div>
   </div>
 
@@ -875,6 +895,64 @@ const oferTrip = [
 // was last uploaded to GitHub, not whatever got clobbered by an older cloud copy on load.
 const PRISTINE_ITINERARY = JSON.parse(JSON.stringify(itinerary));
 const PRISTINE_OFER = JSON.parse(JSON.stringify(oferTrip));
+
+// ---- "Today" logic: find which leg contains today's date ----
+const TRIP_START = new Date(2026, 6, 6);  // Jul 6 2026
+const TRIP_END   = new Date(2026, 7, 6);  // Aug 6 2026
+
+function todayDate(){ return new Date(); }
+
+// Returns the itinerary index whose date range contains today, or -1 if outside all ranges.
+function findTodayLegIndex(items){
+  const today = todayDate();
+  today.setHours(0,0,0,0);
+  for(let i=0;i<items.length;i++){
+    const it=items[i];
+    const start=parseLegStartDate(it.dates);
+    if(!start) continue;
+    // Find end date: either the start of the next leg with a real date, or start+1 for single-day legs
+    let end=null;
+    for(let j=i+1;j<items.length;j++){
+      const s=parseLegStartDate(items[j].dates);
+      if(s){ end=s; break; }
+    }
+    if(!end){ end=new Date(start); end.setDate(end.getDate()+1); }
+    if(today>=start && today<end) return i;
+  }
+  return -1;
+}
+
+// Updates the dashboard "Today" stat and returns the active leg index (or -1).
+function updateTodayStat(){
+  const todayStat=document.getElementById('todayStat');
+  const todayBig=document.getElementById('todayBig');
+  if(!todayStat || !todayBig) return -1;
+  const now=todayDate();
+  now.setHours(0,0,0,0);
+  const tripStart=new Date(TRIP_START); tripStart.setHours(0,0,0,0);
+  const tripEnd=new Date(TRIP_END); tripEnd.setHours(0,0,0,0);
+  if(now < tripStart){
+    const daysLeft=Math.ceil((tripStart-now)/86400000);
+    todayStat.innerHTML=`<div class="label">Countdown</div>
+      <div class="countdown">${daysLeft}</div>
+      <div class="cdlabel">days until departure 🎌</div>`;
+    return -1;
+  }
+  if(now > tripEnd){
+    todayBig.textContent='Trip complete 🎉';
+    return -1;
+  }
+  const idx=findTodayLegIndex(itinerary);
+  if(idx>=0){
+    const it=itinerary[idx];
+    todayBig.innerHTML=`${it.loc}<br><span style="font-size:.95rem;font-weight:500">${it.dates}</span>`;
+    todayStat.querySelector('.label').textContent='Today · '+it.title;
+  } else {
+    todayBig.textContent='In transit';
+  }
+  return idx;
+}
+
 
 // ---- Shared sync via Firebase Realtime Database ----
 // Local cache keys (used for instant load + offline fallback only — Firebase is the source of truth)
@@ -1327,9 +1405,10 @@ function renderTimeline(){
   const wasOpen = new Set();
   rail.querySelectorAll('.leg.open .dates[data-idx]').forEach(el=>wasOpen.add(el.dataset.idx));
   rail.innerHTML='';
+  const todayLegIdx=findTodayLegIndex(itinerary);
   itinerary.forEach((it,i)=>{
     const el=document.createElement('div');
-    el.className='leg';
+    el.className='leg'+(i===todayLegIdx?' today-leg':'');
     el.style.animationDelay=(i*0.05)+'s';
     const addedBadge=(it.added&&it.added.length)?`<span class="added-badge">+${it.added.length} added</span>`:'';
     const hol=it.holiday && holidays[it.holiday];
@@ -1356,6 +1435,9 @@ function renderTimeline(){
       const idx=el.querySelector('[data-idx]')?.dataset.idx;
       if(idx && wasOpen.has(idx)) el.classList.add('open');
     });
+  } else if(todayLegIdx>=0){
+    // On first load during the trip, open today's card instead of the first card
+    rail.querySelectorAll('.leg')[todayLegIdx]?.classList.add('open');
   } else {
     rail.querySelector('.leg')?.classList.add('open');
   }
@@ -1372,9 +1454,10 @@ function renderOferTimeline(){
   const wasOpen = new Set();
   railOfer.querySelectorAll('.leg.open [data-ofer-idx]').forEach(el=>wasOpen.add(el.dataset.oferIdx));
   railOfer.innerHTML='';
+  const oferTodayIdx=findTodayLegIndex(oferTrip);
   oferTrip.forEach((it,i)=>{
     const el=document.createElement('div');
-    el.className='leg';
+    el.className='leg'+(i===oferTodayIdx?' today-leg':'');
     el.style.animationDelay=(i*0.04)+'s';
     el.innerHTML=`
       <div class="dot" style="background:${it.color}" data-ofer-idx="${i}">${it.icon}</div>
@@ -1398,6 +1481,8 @@ function renderOferTimeline(){
     railOfer.querySelectorAll('.leg').forEach((el,i)=>{
       if(wasOpen.has(String(i))) el.classList.add('open');
     });
+  } else if(oferTodayIdx>=0){
+    railOfer.querySelectorAll('.leg')[oferTodayIdx]?.classList.add('open');
   } else {
     railOfer.querySelector('.leg')?.classList.add('open');
   }
@@ -1414,7 +1499,29 @@ if(document.fonts && document.fonts.ready){
   document.fonts.ready.then(()=>{ try{ realignBothRails(); }catch(_){} });
 }
 
+// ---- Today stat + scroll-to-today on load ----
+function initTodayFeatures(){
+  updateTodayStat();
+  const todayIdx=findTodayLegIndex(itinerary);
+  if(todayIdx<0) return; // pre-trip or post-trip — nothing to scroll to
+  // Expand today's week in the shared collapse state so it's visible
+  const monday=_lastAnchor ? mondayOnOrBefore(
+    new Date(Math.max(parseLegStartDate(itinerary[todayIdx].dates), TRIP_START))
+  ) : null;
+  if(monday){
+    const wk=Math.floor((monday-_lastAnchor)/(7*DAY_MS));
+    if(collapsedWeeks.has(wk)){ collapsedWeeks.delete(wk); realignBothRails(); }
+  }
+  // Scroll today's card into view after a short delay to let layout settle
+  setTimeout(()=>{
+    const todayEl=rail.querySelector('.leg.today-leg');
+    if(todayEl) todayEl.scrollIntoView({behavior:'smooth', block:'center'});
+  }, 600);
+}
+
 initFirebaseSync();
+// Run today features after a tick to let Firebase populate data first
+setTimeout(initTodayFeatures, 800);
 
 // Holiday & festival event quick-add (event delegation on the timeline)
 rail.addEventListener('click', e=>{
@@ -1549,14 +1656,19 @@ function drawMarkers(){
 
   const depMarkers={};
   let n=0;
+  const myTodayIdx=findTodayLegIndex(itinerary);
   itinerary.forEach((it,idx)=>{
     if(typeof it.lat!=='number') return;
     n++;
     const pos=offset[idx]||{lat:it.lat,lng:it.lng};
+    const isToday=(idx===myTodayIdx);
     if(haveMap){
-      const m=L.marker([pos.lat,pos.lng],{icon:makeIcon(n,it.color,false)});
+      const icon=L.divIcon({className:'',
+        html:`<div class="pin${isToday?' today-pin':''}" style="background:${it.color}"><span>${n}</span></div>`,
+        iconSize:[30,30],iconAnchor:[15,30],popupAnchor:[0,-30]});
+      const m=L.marker([pos.lat,pos.lng],{icon, zIndexOffset:isToday?1000:0});
       const addedList=(it.added||[]).map(a=>`<br>📍 ${a.name}${a.note?` — ${a.note}`:''}`).join('');
-      m.bindPopup(`<div class="leaf-pop"><div class="pop-dates">${it.dates}</div><b>${n}. ${it.title}</b><br>${it.mapName||it.hotel}${addedList}</div>`);
+      m.bindPopup(`<div class="leaf-pop"><div class="pop-dates">${it.dates}${isToday?' · <b style="color:var(--vermilion)">TODAY</b>':''}</div><b>${n}. ${it.title}</b><br>${it.mapName||it.hotel}${addedList}</div>`);
       markerGroup.addLayer(m);
       legMarkers[idx]={marker:m,pos};
       (it.added||[]).forEach(a=>{
@@ -1622,12 +1734,17 @@ function drawMarkers(){
   const showOfer = !oferToggle || oferToggle.checked;
   if(showOfer){
     const linePts=[];
+    const oferTodayIdx=findTodayLegIndex(oferTrip);
     oferTrip.forEach((it,idx)=>{
       if(typeof it.lat!=='number') return;
       linePts.push([it.lat,it.lng]);
+      const isToday=(idx===oferTodayIdx);
       if(haveMap){
-        const m=L.marker([it.lat,it.lng],{icon:makeOferIcon(idx+1,it.color)});
-        m.bindPopup(`<div class="leaf-pop"><div class="pop-dates">${it.dates} · Ofer</div><b>${idx+1}. ${it.title}</b><br>${it.mapName||it.sleep}</div>`);
+        const oferIcon=L.divIcon({className:'',
+          html:`<div class="pin ofer-pin${isToday?' ofer-today-pin':''}" style="background:${it.color}"><span>${idx+1}</span></div>`,
+          iconSize:[26,26],iconAnchor:[13,26],popupAnchor:[0,-26]});
+        const m=L.marker([it.lat,it.lng],{icon:oferIcon, zIndexOffset:isToday?1000:0});
+        m.bindPopup(`<div class="leaf-pop"><div class="pop-dates">${it.dates} · Ofer${isToday?' · <b style="color:#7a4f8c">TODAY</b>':''}</div><b>${idx+1}. ${it.title}</b><br>${it.mapName||it.sleep}</div>`);
         oferMarkerGroup.addLayer(m);
       }
       if(oferWrap){
